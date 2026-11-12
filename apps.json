@@ -2,5 +2,35 @@
   "name": "步迹",
   "identifier": "com.yg.stride.source",
   "sourceURL": "https://raw.githubusercontent.com/yuanyeye0210-debug/stride-app/main/apps.json",
-  "apps": []
+  "apps": [
+    {
+      "name": "步迹",
+      "bundleIdentifier": "com.yg.stride",
+      "developerName": "Stride",
+      "localizedDescription": "练得清楚，才练得下去。训练记录、饮水、本周计划和 AI 教练都在本机。",
+      "iconURL": "https://raw.githubusercontent.com/yuanyeye0210-debug/stride-app/main/ios/Stride/Resources/Assets.xcassets/AppIcon.appiconset/AppIcon.png",
+      "icon": "https://raw.githubusercontent.com/yuanyeye0210-debug/stride-app/main/ios/Stride/Resources/Assets.xcassets/AppIcon.appiconset/AppIcon.png",
+      "tintColor": "5CE08F",
+      "version": "1.1.4",
+      "date": "2026-11-12T01:55:34Z",
+      "downloadURL": "https://github.com/yuanyeye0210-debug/stride-app/releases/download/stride-v1.1.4/Stride-1.1.4.ipa",
+      "size": 1498704,
+      "versions": [
+        {
+          "version": "1.1.4",
+          "date": "2026-11-12T01:55:34Z",
+          "localizedDescription": "步迹 1.1.4。未签名安装包，用 SideStore 和 LocalDevVPN 安装。",
+          "downloadURL": "https://github.com/yuanyeye0210-debug/stride-app/releases/download/stride-v1.1.4/Stride-1.1.4.ipa",
+          "size": 1498704
+        },
+        {
+          "version": "1.0.1",
+          "date": "2026-11-10T22:02:51Z",
+          "localizedDescription": "步迹 1.0.1。未签名安装包，用 SideStore 和 LocalDevVPN 安装。",
+          "downloadURL": "https://github.com/yuanyeye0210-debug/stride-app/releases/download/stride-v1.0.1/Stride-1.0.1.ipa",
+          "size": 1522899
+        }
+      ]
+    }
+  ]
 }
