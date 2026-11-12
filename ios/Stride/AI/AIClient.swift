@@ -302,7 +302,7 @@ struct AIClient {
         maxTokens: Int = 800
     ) throws -> Data {
         try VisionImageLimits.validateBase64Length(imageBase64JPEG)
-        try JSONEncoder().encode(visionRequest(imageBase64JPEG: imageBase64JPEG, prompt: prompt, config: config, maxTokens: maxTokens))
+        return try JSONEncoder().encode(visionRequest(imageBase64JPEG: imageBase64JPEG, prompt: prompt, config: config, maxTokens: maxTokens))
     }
 
     private static func visionRequest(
