@@ -6,6 +6,7 @@ struct TrainingHomeView: View {
     @State private var draft: SessionDraft?
     @State private var showSession = false
     @State private var detail: WorkoutSession?
+    @State private var showReorder = false
     @State private var toast: String?
 
     var body: some View {
@@ -32,6 +33,9 @@ struct TrainingHomeView: View {
         .sheet(item: $detail) { session in
             SessionDetailView(session: session)
         }
+        .sheet(isPresented: $showReorder) {
+            WeekReorderSheet()
+        }
         .toast($toast)
     }
 
@@ -54,7 +58,7 @@ struct TrainingHomeView: View {
         VStack(alignment: .leading, spacing: 14) {
             HStack {
                 VStack(alignment: .leading, spacing: 3) {
-                    Text("四周计划")
+                    Text("本周")
                         .font(.system(size: 18, weight: .bold))
                         .foregroundStyle(Palette.text)
                     if let plan = store.state.plan {
@@ -81,7 +85,7 @@ struct TrainingHomeView: View {
 
             if let plan = store.state.plan {
                 HStack(spacing: 6) {
-                    ForEach(plan.days) { day in
+                    ForEach(plan.days.sorted { $0.weekday < $1.weekday }) { day in
                         dayChip(day)
                     }
                 }
@@ -108,6 +112,29 @@ struct TrainingHomeView: View {
         }
         .padding(18)
         .card(radius: 24, fill: Palette.card, stroke: Palette.stroke)
+        .contextMenu {
+            Button {
+                showReorder = true
+            } label: {
+                Label("拖动调整这一周", systemImage: "arrow.up.arrow.down")
+            }
+            Button {
+                toast = store.copyLastWeekToThisWeek() ? "已复制上周" : "没有上周的安排"
+            } label: {
+                Label("复制上周到这一周", systemImage: "doc.on.doc")
+            }
+            Button(role: .destructive) {
+                store.clearThisWeek()
+                toast = "这一周已清空"
+            } label: {
+                Label("清空这一周", systemImage: "trash")
+            }
+            Button {
+                toast = store.restoreWeek() ? "已还原" : "没有可还原的修改"
+            } label: {
+                Label("还原", systemImage: "arrow.uturn.backward")
+            }
+        }
     }
 
     private func dayChip(_ day: PlannedDay) -> some View {
@@ -378,5 +405,49 @@ struct ExerciseLibraryView: View {
                 }
             }
         }
+    }
+}
+
+private struct WeekReorderSheet: View {
+    @EnvironmentObject private var store: AppStore
+    @Environment(\.dismiss) private var dismiss
+
+    private let names = ["日", "一", "二", "三", "四", "五", "六"]
+
+    var body: some View {
+        NavigationStack {
+            List {
+                ForEach(store.state.plan?.days.sorted { $0.weekday < $1.weekday } ?? []) { day in
+                    HStack {
+                        Text(names[max(0, min(6, day.weekday - 1))])
+                            .font(.system(size: 13, weight: .bold))
+                            .foregroundStyle(Palette.textDim)
+                            .frame(width: 28, alignment: .leading)
+                        Text(day.title)
+                            .font(.system(size: 15, weight: .medium))
+                            .foregroundStyle(Palette.text)
+                        Spacer()
+                        if day.rest {
+                            Text("休息")
+                                .font(.system(size: 12))
+                                .foregroundStyle(Palette.textFaint)
+                        }
+                    }
+                }
+                .onMove { store.reorderThisWeek(from: $0, to: $1) }
+            }
+            .environment(\.editMode, .constant(.active))
+            .scrollContentBackground(.hidden)
+            .background(Palette.bg)
+            .navigationTitle("拖动调整这一周")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("完成") { dismiss() }
+                }
+            }
+        }
+        .preferredColorScheme(.dark)
+        .onAppear { store.prepareWeekUndo() }
     }
 }

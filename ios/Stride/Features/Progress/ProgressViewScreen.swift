@@ -14,6 +14,7 @@ struct ProgressViewScreen: View {
 
             ScrollView(showsIndicators: false) {
                 VStack(spacing: 14) {
+                    waterCard
                     segmented
 
                     if tab == 0 {
@@ -36,6 +37,28 @@ struct ProgressViewScreen: View {
         .sheet(item: $selectedRun) { run in
             RouteDetailView(run: run)
         }
+    }
+
+    private var waterCard: some View {
+        let ml = store.todayWaterMl()
+        let goal = max(store.state.waterGoalMl, 1)
+        return VStack(alignment: .leading, spacing: 10) {
+            Text("今日饮水 \(ml) / \(goal) ml")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(Palette.text)
+            BarProgress(progress: Double(ml) / Double(goal), color: Palette.blue, height: 4)
+            HStack {
+                Text("\(WaterLog.percent(ml, goal: goal))%")
+                    .font(.system(size: 12, weight: .semibold, design: .rounded))
+                    .foregroundStyle(Palette.textDim)
+                Spacer()
+                Text("约 \(WaterLog.cups(ml)) 杯")
+                    .font(.system(size: 12))
+                    .foregroundStyle(Palette.textFaint)
+            }
+        }
+        .padding(18)
+        .card(radius: 24, fill: Palette.card, stroke: Palette.stroke)
     }
 
     private var segmented: some View {
