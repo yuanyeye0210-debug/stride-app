@@ -15,26 +15,64 @@ final class AppStore: ObservableObject {
 
     // MARK: - 生命周期
 
-    init() {
-        let fm = FileManager.default
-        let dir = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("Stride", isDirectory: true)
-        try? fm.createDirectory(at: dir, withIntermediateDirectories: true)
-        let url = dir.appendingPathComponent("state.json")
+    /// 测试传入临时文件；正式启动不传，仍写到 Application Support。
+    init(fileURL: URL? = nil) {
+        let url: URL
+        if let fileURL {
+            url = fileURL
+        } else {
+            let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+                .appendingPathComponent("Stride", isDirectory: true)
+            url = base.appendingPathComponent("state.json")
+        }
+        try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
         self.fileURL = url
 
+        let fileExists = FileManager.default.fileExists(atPath: url.path)
+        let preserveFile: Bool
         if let data = try? Data(contentsOf: url),
-           let decoded = try? JSONDecoder().decode(AppState.self, from: data) {
+           let decoded = try? Self.decoder().decode(AppState.self, from: data) {
             self.state = decoded
+            preserveFile = false
+        } else if fileExists {
+            // 文件在但读不出来时，绝不把演示数据写回去。
+            print("[Stride] state.json 无法读取，已保留原文件，没有写入演示数据")
+            var preserved = AppState()
+            preserved.seeded = true
+            self.state = preserved
+            preserveFile = true
         } else {
             self.state = AppState()
+            preserveFile = false
         }
 
-        if !state.seeded {
-            SeedData.seed(&state)
-            state.seeded = true
-            saveNow()
+        if !preserveFile {
+            var needsSave = false
+            if !state.seeded {
+                SeedData.seed(&state)
+                state.seeded = true
+                needsSave = true
+            }
+            let beforeStamp = state.weekStamp
+            let beforeLast = state.lastWeekPlan
+            rollWeekIfNeeded(now: Date())
+            if state.weekStamp != beforeStamp || state.lastWeekPlan != beforeLast {
+                needsSave = true
+            }
+            if needsSave { saveNow() }
         }
+    }
+
+    static func encoder() -> JSONEncoder {
+        let enc = JSONEncoder()
+        enc.dateEncodingStrategy = .iso8601
+        return enc
+    }
+
+    static func decoder() -> JSONDecoder {
+        let dec = JSONDecoder()
+        dec.dateDecodingStrategy = .iso8601
+        return dec
     }
 
     // MARK: - 持久化
@@ -50,9 +88,7 @@ final class AppStore: ObservableObject {
 
     func saveNow() {
         do {
-            let enc = JSONEncoder()
-            enc.dateEncodingStrategy = .iso8601
-            let data = try enc.encode(state)
+            let data = try Self.encoder().encode(state)
             try data.write(to: fileURL, options: .atomic)
         } catch {
             print("[Stride] save failed:", error)
@@ -181,6 +217,87 @@ final class AppStore: ObservableObject {
 
     func addRun(_ run: RouteRun) {
         state.runs.insert(run, at: 0)
+    }
+
+    // MARK: - 饮水
+
+    func todayWaterMl(now: Date = Date()) -> Int {
+        let key = WaterLog.dayKey(now, calendar: calendar)
+        return state.waterDays.first { $0.day == key }?.ml ?? 0
+    }
+
+    func addWater(delta: Int, now: Date = Date()) {
+        let key = WaterLog.dayKey(now, calendar: calendar)
+        let next = WaterLog.adjusted(todayWaterMl(now: now), delta: delta)
+        if let index = state.waterDays.firstIndex(where: { $0.day == key }) {
+            state.waterDays[index].ml = next
+        } else {
+            state.waterDays.append(WaterDay(day: key, ml: next))
+        }
+    }
+
+    // MARK: - 本周计划
+
+    func rollWeekIfNeeded(now: Date, calendar: Calendar? = nil) {
+        let cal = calendar ?? self.calendar
+        let rolled = WeekPlanOps.roll(
+            days: state.plan?.days ?? [],
+            lastWeek: state.lastWeekPlan,
+            stamp: state.weekStamp,
+            now: now,
+            calendar: cal
+        )
+        guard rolled.stamp != state.weekStamp || rolled.lastWeek != state.lastWeekPlan else { return }
+        var next = state
+        next.lastWeekPlan = rolled.lastWeek
+        next.weekStamp = rolled.stamp
+        state = next
+    }
+
+    func prepareWeekUndo() {
+        state.planUndo = state.plan?.days
+    }
+
+    func reorderThisWeek(from offsets: IndexSet, to destination: Int) {
+        guard var plan = state.plan else { return }
+        var next = state
+        if next.planUndo == nil {
+            next.planUndo = plan.days
+        }
+        plan.days = WeekPlanOps.reorder(plan.days, from: offsets, to: destination)
+        next.plan = plan
+        state = next
+    }
+
+    @discardableResult
+    func copyLastWeekToThisWeek() -> Bool {
+        guard var plan = state.plan, let copied = WeekPlanOps.copied(from: state.lastWeekPlan) else { return false }
+        var next = state
+        next.planUndo = plan.days
+        plan.days = copied
+        next.plan = plan
+        state = next
+        return true
+    }
+
+    func clearThisWeek() {
+        guard var plan = state.plan else { return }
+        var next = state
+        next.planUndo = plan.days
+        plan.days = WeekPlanOps.cleared(plan.days)
+        next.plan = plan
+        state = next
+    }
+
+    @discardableResult
+    func restoreWeek() -> Bool {
+        guard let undo = state.planUndo, var plan = state.plan else { return false }
+        plan.days = undo
+        var next = state
+        next.plan = plan
+        next.planUndo = nil
+        state = next
+        return true
     }
 
     func updateRun(_ run: RouteRun) {

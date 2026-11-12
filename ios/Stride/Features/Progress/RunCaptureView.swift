@@ -126,7 +126,6 @@ struct RunCaptureView: View {
     @StateObject private var tracker = RunTracker()
     @State private var camera: MapCameraPosition = .automatic
     @State private var title = "夜跑"
-    @State private var showMembership = false
     @State private var toast: String?
 
     private var coords: [CLLocationCoordinate2D] {
@@ -153,7 +152,6 @@ struct RunCaptureView: View {
                 }
             }
             .onAppear { tracker.requestPermission() }
-            .membershipSheet($showMembership)
             .toast($toast)
         }
     }

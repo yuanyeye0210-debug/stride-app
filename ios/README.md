@@ -1,10 +1,9 @@
 # Stride · 步迹
 
-一个**独立实现的 iOS 健身 App**：训练记录、渐进式负荷、AI 热量识别与教练、足迹画风、Watch/健康联动。
-功能矩阵按 Msats 的会员页对齐（免费 / Pro / Max 三档），界面沿用同一套深色视觉语言；
-**代码、素材、品牌全部原创**，不包含任何第三方 App 的二进制、资源或破解逻辑。
+一个**独立实现的 iOS 健身 App**：训练记录、渐进式负荷、AI 热量识别与教练、足迹画风。
+界面是深色的；**代码、素材、品牌全部原创**，不包含任何第三方 App 的二进制、资源或破解逻辑。
 
-工程里的权益默认**全部解锁**（`LaunchFlags.everythingUnlocked = true`），会员页仍然完整可交互，用于展示和承接真实订阅。
+权益默认全部可用（`LaunchFlags.everythingUnlocked = true`）。会员付费墙已经去掉，不再出现购买页。启动时也不会模拟 Apple Watch 连接。
 
 ---
 
@@ -47,25 +46,23 @@
 | 3 套足迹画风 · 1 套分享模板 | `Features/Progress/RouteArtView.swift` |
 | 歌词同步不限次数 | `Features/Music/LyricsView.swift`（LRC 解析 + 逐行跟读） |
 
-### Pro / Max
+额度网关还在 `Core/Entitlements.swift`，但 `LaunchFlags.everythingUnlocked` 为 true 时按最高档放行，界面上没有付费墙。
 
-| 权益 | 实现 |
+| 能力 | 实现 |
 |---|---|
-| 每天 40 次 / 不限次 AI 热量识别 | `Core/Entitlements.swift` 的 `Tier.foodLimitPerDay` + 每日额度记账 |
-| 更充裕 / 不限 AI 教练额度 | `Tier.coachLimit` + `QuotaBook` |
+| AI 热量识别与教练 | `Core/Entitlements.swift` 的 `Gate`，当前不限额 |
 | AI 生成训练计划 | `AI/PlanGenerator.swift`（本地周期化生成，可换模型重排） |
-| 渐进式 AI 学习 | `Core/ProgressiveEngine.swift`（e1RM、双进阶、RPE 自调节、减载判定） |
-| iCloud 数据同步 | 预留：`AppStore` 的 JSON 状态可直接换 `NSUbiquitousKeyValueStore` 或 CloudKit 私有库 |
+| 渐进式负荷 | `Core/ProgressiveEngine.swift`（e1RM、双进阶、RPE 自调节、减载判定） |
 | 歌单链接导入解析 | `Features/Music/PlaylistImportView.swift` |
-| 全部足迹画风与分享模板 | `RouteArtStyle`（6 种）/ `ShareTemplate`（4 种）+ `ImageRenderer` 出图 |
-
-会员页本体：`Features/Membership/MembershipView.swift` —— 年付/半年付/月付、绿色省钱标、当前方案态、Pro 展开列表、免费版已包含网格、本期用量、底部自动续订说明，全部按截图还原。
+| 足迹画风与分享模板 | `RouteArtStyle`（6 种）/ `ShareTemplate`（4 种）+ `ImageRenderer` 出图 |
+| 饮水 | `Core/Models.swift` 的 `WaterLog`，主页和记录页各一张卡 |
+| 本周计划 | `Features/Workout/TrainingHomeView.swift`，长按「本周」卡片可调整 |
 
 ---
 
 ## 接一个真模型
 
-「我的 → AI 服务」填三项即可，兼容任何 OpenAI 协议端点：
+「自己 → AI 服务」填三项即可，兼容任何 OpenAI 协议端点：
 
 ```
 接口地址   https://api.openai.com/v1        （或自建网关 / 国内兼容服务）
@@ -88,7 +85,6 @@ API Key    sk-...
 | 配色 | `App/Theme.swift` 的 `Palette` |
 | 默认档位 / 额度 | `Core/Entitlements.swift` 的 `Tier` |
 | 是否全解锁 | `App/Brand.swift` 的 `LaunchFlags.everythingUnlocked` |
-| 真订阅 | 把 `PurchaseService` 换成 StoreKit 2 的 `Product.purchase()`，UI 不用动 |
 
 ---
 
@@ -108,5 +104,4 @@ API Key    sk-...
 ## 边界说明
 
 - 不包含、也不依赖任何第三方 App 的安装包、逆向产物或授权绕过逻辑。
-- 会员页是**本 App 自己的**订阅界面：默认全解锁，接真订阅时用上面那行替换购买实现。
-- 用户数据只写本机 `Application Support`，不上传；拍照识别的图片只在你配置了 AI 服务时发给你自己的端点。
+- 没有会员购买页。用户数据只写本机 `Application Support`；API Key 在钥匙串里，只有请求你填写的接口时才会发出去。拍照识别的图片只在配置了 AI 服务时发给那个端点。

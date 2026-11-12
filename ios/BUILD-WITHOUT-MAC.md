@@ -1,113 +1,74 @@
 # 没有 Mac，怎么把它装到 iPhone 上
 
-结论先说：**IPA 必须由 macOS 工具链编译**，Sideloadly 负责「签名 + 安装」，不负责编译。
-所以流程是三步：
+IPA 由 GitHub 的 macOS 运行器编译。签名和安装在手机上用 **SideStore** 完成，刷新签名需要同时开着 **LocalDevVPN**。
 
 ```
-云端 macOS 编译（GitHub 免费）  →  下载未签名 Stride-unsigned.ipa  →  Sideloadly 用你的 Apple ID 签名安装
+云端测试通过 → 编译未签名 IPA → GitHub Release → SideStore 源 apps.json → 手机安装
 ```
 
-全程只需要：一个 GitHub 账号（免费）、你的 iPhone、一根数据线、Windows 上的 Sideloadly。
-我已经把编译脚本和 Scheme 都放进工程里了，你只需要点一下。
+需要：这个 GitHub 仓库、你的 iPhone、一个 Apple ID。第一次把 SideStore 装进手机，按 [SideStore 官方说明](https://sidestore.io) 做一次即可。
+
+Bundle ID 是 `com.yg.stride`。不要改，否则收不到后续更新。
 
 ---
 
-## 第一步：把工程推到 GitHub（约 3 分钟）
+## 第一步：等云端编译
 
-Windows 上已经装了 Git，在 PowerShell 里执行（把 `<你的用户名>` 换成你的 GitHub 用户名）：
+`ios/` 的改动推到 `main` 之后：
 
-```powershell
-cd "F:\Masats破解版\StrideApp\iOS"
-git init -b main
-git add .
-git commit -m "Stride iOS app"
-```
+1. 打开 https://github.com/yuanyeye0210-debug/stride-app/actions/workflows/stride-ios.yml
+2. 等这次运行变成绿色对勾。测试失败时不会发布安装包。
+3. 完成后，Release 里会有 `Stride-1.1.N.ipa`，仓库根目录的 `apps.json` 会写上当前版和上一版。
 
-先去 https://github.com/new 建一个空仓库，名字随意（比如 `stride`），**不要**勾选 README / .gitignore。
-然后把仓库地址接上并推送：
+源地址：
 
-```powershell
-git remote add origin https://github.com/<你的用户名>/stride.git
-git push -u origin main
-```
+https://raw.githubusercontent.com/yuanyeye0210-debug/stride-app/main/apps.json
 
-> 第一次 push 会弹浏览器让你登录 GitHub 授权，按提示走即可。
-
-不想用命令行也可以：在 GitHub 网页上 New repository → 进入仓库 → **Add file → Upload files**，
-把 `F:\Masats破解版\StrideApp\iOS` 里的**所有内容**（包括隐藏的 `.github` 文件夹）一起拖进去。
-注意：Windows 资源管理器里要打开「显示隐藏的项目」，否则 `.github` 传不上去，Actions 就不存在。
+也可以从 https://github.com/yuanyeye0210-debug/stride-app/releases 直接看安装包。日常安装不用自己下载 IPA。
 
 ---
 
-## 第二步：让 GitHub 帮你编译（约 5 分钟，不用管）
+## 第二步：SideStore + LocalDevVPN
 
-1. 打开你的仓库 → 顶部 **Actions** 标签；
-2. 如果提示 "Workflows aren't being run on this repository"，点 **I understand my workflows, go ahead and enable them**；
-3. 左侧选 **build-unsigned-ipa** → 右侧 **Run workflow** → 绿色 **Run workflow**；
-4. 等 4–7 分钟，出现绿色对勾；
-5. 点进这次运行 → 页面底部 **Artifacts** → 下载 **Stride-unsigned-ipa**。
+1. 按 SideStore 官方说明，把 SideStore 装到 iPhone（只需做一次）。
+2. 安装并连接 **LocalDevVPN**。SideStore 靠它在后台刷新签名。
+3. 打开 SideStore → **源** → 添加：
 
-下载得到的是一个 zip，解压出来就是 `Stride-unsigned.ipa`。
+   `https://raw.githubusercontent.com/yuanyeye0210-debug/stride-app/main/apps.json`
 
-> 编译用的是 GitHub 免费的 macOS 15 运行器（自带 Xcode 16），不花你一分钱。
-> 如果这一步报错，把日志最后 30 行发我，我改脚本。
+4. 在源里找到 **步迹**，安装。SideStore 用你的 Apple ID 签名。
+5. 若提示不受信任：设置 → 通用 → VPN 与设备管理 → 信任你的 Apple ID，再打开步迹。
 
----
-
-## 第三步：Sideloadly 安装（约 2 分钟）
-
-前提：Windows 上要装 **Apple 官方版 iTunes**（从 apple.com 下的那个，不是 Microsoft Store 版），
-它提供 `Apple Mobile Device Support` 驱动。装完重启一次电脑。
-
-1. iPhone 用数据线连电脑，手机上点「信任此电脑」；
-2. 打开 Sideloadly，左上角会自动识别到你的设备（没识别就点刷新）；
-3. 把 `Stride-unsigned.ipa` 拖进 Sideloadly 的 IPA 框；
-4. **Apple ID** 填你的 Apple ID（免费账号就行）；
-5. 点 **Start**，输入 Apple ID 密码；
-   - 如果开了双重认证，会要你在手机上确认，然后填一个 **App 专用密码**（appleid.apple.com → 登录与安全 → App 专用密码 → 生成一个填进去）；
-6. 进度条走完，手机上就出现 **Stride** 了。
-
-**首次打开会被拦**：设置 → 通用 → VPN 与设备管理 → 找到你的 Apple ID → 点「信任」。
-然后回桌面打开 Stride。
+源里同时放着当前版和上一版。新版出问题，可以装回上一版。
 
 ---
 
-## 免费 Apple ID 的现实限制（提前知道，别到时候懵）
+## 免费 Apple ID 的限制
 
 | 限制 | 说明 | 影响 |
 |---|---|---|
-| **7 天过期** | 免费证书 7 天失效，App 打不开 | 每周重连一次 Sideloadly 点 Start 重签，数据不丢 |
-| **最多 3 个 App** | 免费账号同时只能装 3 个自签应用 | 装别的就得删 |
-| **每周 10 个 App ID** | 改 Bundle ID 会消耗额度 | 尽量别频繁改 bundle id |
-| **没有 HealthKit 权限** | 免费配置里带不了 HealthKit entitlement | 「Apple 健康」那一行会授权失败，这是正常的 |
-| **没有 Watch App** | 手表 target 需要单独签名 | 手机侧的 Watch 桥接照常编译，但腕上没界面 |
+| **7 天过期** | 免费证书 7 天后失效 | 到期前打开 SideStore，保持 LocalDevVPN 连接，点刷新。数据还在，不用重装 |
+| **最多 3 个 App** | 免费账号同时只能有 3 个自签 App | 要装别的就得删一个 |
+| **每周 10 个 App ID** | 改 Bundle ID 会消耗额度 | 不要改 `com.yg.stride` |
+| **没有 HealthKit 权限** | 免费描述文件带不了 HealthKit | 「Apple 健康」授权会失败，这是正常的 |
+| **没有 Watch App** | 手表需要单独的 target | 手机里不显示假的手表连接 |
 
-想要 7 天不过期，只有两条路：付费开发者账号（$99/年，1 年有效期），或者用 AltStore 的自动续签（仍然需要一台常开的电脑）。
+付费开发者账号（$99/年）可以把有效期拉长。没有的话，就靠 SideStore 加 LocalDevVPN 在到期前刷新。
 
 ---
 
-## 常见报错
+## 常见问题
 
-| 现象 | 原因 / 处理 |
+| 现象 | 处理 |
 |---|---|
-| Sideloadly 卡在 "Generating..." | 双重认证没填 App 专用密码，换专用密码重试 |
-| 手机提示 "无法安装此 App" | Bundle ID 被别人占了；Sideloadly 里把 Bundle ID 改成 `com.<你的名字>.stride` |
-| 打开就闪退 | 证书没被信任，去 VPN 与设备管理里点信任 |
-| 装完图标是白的 | 正常，首次启动后会缓存图标 |
-| 打不开、提示需要更新 | 满 7 天了，重新走一遍 Sideloadly |
+| SideStore 添加源失败 | 确认手机能打开上面的 `apps.json`。刚推上 `main` 时要等 Actions 跑完，源里才会出现版本 |
+| 刷新失败 | 先打开 LocalDevVPN 并连接，再回 SideStore 刷新 |
+| 打开就闪退 | 到「VPN 与设备管理」里信任描述文件 |
+| 提示需要更新或打不开 | 证书过期了。SideStore 里刷新当前版本 |
+| 源里没有更老的包 | 正常。只保留当前版和上一版 |
 
 ---
 
-## 另一个不用 GitHub 的选项
+## 不想装 SideStore
 
-[Codemagic](https://codemagic.io) 也能在浏览器里编译 iOS 包（免费 500 分钟/月），
-它的 `codemagic.yaml` 我也放在工程根目录了：注册 → 连同一个 GitHub 仓库 → 选 `ios-unsigned` 工作流 →
-构建完成后在 Artifacts 里下 `Stride-unsigned.ipa`。缺点依然是**要先有 Git 仓库**。
-
----
-
-## 如果连 GitHub 都不想弄
-
-`F:\Masats破解版\StrideApp\Web\` 里是同一套 App 的 Web 版，我用本地服务器跑起来了：
-手机连同一个 Wi-Fi，Safari 打开我给你的地址 → 分享 → 「添加到主屏幕」，桌面就有图标，
-全屏运行，功能除了健康/Watch/相机骨骼识别以外全都在。见同目录 `README.md`。
+`web/` 是同一套 App 的浏览器版。电脑上 `cd web` 后 `python -m http.server 8080`，手机用 Safari 打开，分享 → 添加到主屏幕。健康、Watch 和相机骨骼识别不在网页版里。见 `web/README.md`。

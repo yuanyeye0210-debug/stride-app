@@ -19,7 +19,7 @@ struct AISettingsView: View {
                         note
 
                         field(title: "接口地址", hint: "OpenAI 兼容，例如 https://api.openai.com/v1 或自建网关", text: $draft.baseURL, secure: false)
-                        field(title: "API Key", hint: "只存在本机 UserDefaults，不会上传", text: $draft.apiKey, secure: true)
+                        field(title: "API Key", hint: "保存在本机钥匙串。请求模型时会发给你填写的接口，不会写进 UserDefaults", text: $draft.apiKey, secure: true)
                         field(title: "对话模型", hint: "例如 gpt-4o-mini / qwen-vl-max", text: $draft.chatModel, secure: false)
                         field(title: "视觉模型", hint: "用于热量识别，需要支持图片输入", text: $draft.visionModel, secure: false)
 

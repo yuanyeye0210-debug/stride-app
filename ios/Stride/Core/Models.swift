@@ -394,6 +394,50 @@ struct QuotaBook: Codable, Hashable {
     }
 }
 
+// MARK: - 饮水
+
+struct WaterDay: Codable, Hashable, Identifiable {
+    var id = UUID()
+    var day: String
+    var ml: Int
+}
+
+enum WaterLog {
+    static let defaultGoalMl = 1800
+    static let stepMl = 500
+    static let cupMl = 200
+
+    static func dayKey(_ date: Date, calendar: Calendar = .current) -> String {
+        let parts = calendar.dateComponents([.year, .month, .day], from: date)
+        return String(format: "%04d-%02d-%02d", parts.year ?? 0, parts.month ?? 0, parts.day ?? 0)
+    }
+
+    static func adjusted(_ ml: Int, delta: Int) -> Int {
+        max(0, ml + delta)
+    }
+
+    static func cups(_ ml: Int) -> Int {
+        ml / cupMl
+    }
+
+    static func percent(_ ml: Int, goal: Int) -> Int {
+        guard goal > 0 else { return 0 }
+        return Int((Double(ml) / Double(goal) * 100).rounded())
+    }
+
+    static func grouped(_ value: Int) -> String {
+        let digits = String(abs(value))
+        var parts: [String] = []
+        var rest = digits
+        while rest.count > 3 {
+            parts.insert(String(rest.suffix(3)), at: 0)
+            rest.removeLast(3)
+        }
+        if !rest.isEmpty { parts.insert(rest, at: 0) }
+        return parts.joined(separator: ",")
+    }
+}
+
 // MARK: - 持久化根
 
 struct AppState: Codable {
@@ -408,4 +452,56 @@ struct AppState: Codable {
     var membership = MembershipState()
     var quotas = QuotaBook()
     var seeded = false
+    var waterDays: [WaterDay] = []
+    var waterGoalMl: Int = WaterLog.defaultGoalMl
+    var lastWeekPlan: [PlannedDay] = []
+    var planUndo: [PlannedDay]? = nil
+    var weekStamp: Int = 0
+
+    enum CodingKeys: String, CodingKey {
+        case profile, exercises, sessions, foods, runs, chats, snapshots, plan, membership, quotas, seeded
+        case waterDays, waterGoalMl, lastWeekPlan, planUndo, weekStamp
+    }
+
+    init() {}
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        profile = try c.decodeIfPresent(Profile.self, forKey: .profile) ?? Profile()
+        exercises = try c.decodeIfPresent([Exercise].self, forKey: .exercises) ?? []
+        sessions = try c.decodeIfPresent([WorkoutSession].self, forKey: .sessions) ?? []
+        foods = try c.decodeIfPresent([FoodEntry].self, forKey: .foods) ?? []
+        runs = try c.decodeIfPresent([RouteRun].self, forKey: .runs) ?? []
+        chats = try c.decodeIfPresent([ChatTurn].self, forKey: .chats) ?? []
+        snapshots = try c.decodeIfPresent([DailySnapshot].self, forKey: .snapshots) ?? []
+        plan = try c.decodeIfPresent(TrainingPlan.self, forKey: .plan)
+        membership = try c.decodeIfPresent(MembershipState.self, forKey: .membership) ?? MembershipState()
+        quotas = try c.decodeIfPresent(QuotaBook.self, forKey: .quotas) ?? QuotaBook()
+        seeded = try c.decodeIfPresent(Bool.self, forKey: .seeded) ?? false
+        waterDays = try c.decodeIfPresent([WaterDay].self, forKey: .waterDays) ?? []
+        waterGoalMl = try c.decodeIfPresent(Int.self, forKey: .waterGoalMl) ?? WaterLog.defaultGoalMl
+        lastWeekPlan = try c.decodeIfPresent([PlannedDay].self, forKey: .lastWeekPlan) ?? []
+        planUndo = try c.decodeIfPresent([PlannedDay].self, forKey: .planUndo)
+        weekStamp = try c.decodeIfPresent(Int.self, forKey: .weekStamp) ?? 0
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(profile, forKey: .profile)
+        try c.encode(exercises, forKey: .exercises)
+        try c.encode(sessions, forKey: .sessions)
+        try c.encode(foods, forKey: .foods)
+        try c.encode(runs, forKey: .runs)
+        try c.encode(chats, forKey: .chats)
+        try c.encode(snapshots, forKey: .snapshots)
+        try c.encodeIfPresent(plan, forKey: .plan)
+        try c.encode(membership, forKey: .membership)
+        try c.encode(quotas, forKey: .quotas)
+        try c.encode(seeded, forKey: .seeded)
+        try c.encode(waterDays, forKey: .waterDays)
+        try c.encode(waterGoalMl, forKey: .waterGoalMl)
+        try c.encode(lastWeekPlan, forKey: .lastWeekPlan)
+        try c.encodeIfPresent(planUndo, forKey: .planUndo)
+        try c.encode(weekStamp, forKey: .weekStamp)
+    }
 }

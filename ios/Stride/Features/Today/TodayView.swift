@@ -8,7 +8,6 @@ struct TodayView: View {
     @State private var showFoodSheet = false
     @State private var showRunSheet = false
     @State private var showCoachSheet = false
-    @State private var showMembership = false
     @State private var healthMetrics: HealthKitManager.DayMetrics?
 
     private var profile: Profile { store.state.profile }
@@ -34,6 +33,7 @@ struct TodayView: View {
                 VStack(spacing: 14) {
                     header
                     activityCard
+                    waterCard
                     quickActions
                     planCard
                     nutritionCard
@@ -62,7 +62,6 @@ struct TodayView: View {
         .sheet(isPresented: $showCoachSheet) {
             NavigationStack { CoachView() }
         }
-        .membershipSheet($showMembership)
     }
 
     // MARK: - 头部
@@ -82,20 +81,16 @@ struct TodayView: View {
             }
             Spacer()
             Button {
-                showMembership = true
+                showCoachSheet = true
             } label: {
-                HStack(spacing: 5) {
-                    Image(systemName: "crown.fill")
-                        .font(.system(size: 11, weight: .bold))
-                    Text(store.state.membership.tier == .max ? "MAX" : "升级")
-                        .font(.system(size: 11, weight: .heavy))
-                }
-                .foregroundStyle(Color.black)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 6)
-                .background(Capsule().fill(Color.white))
+                Image(systemName: "sparkles")
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundStyle(Color.black)
+                    .frame(width: 40, height: 40)
+                    .background(Circle().fill(Color.white))
             }
             .buttonStyle(.plain)
+            .accessibilityLabel("教练")
             .padding(.top, 6)
         }
         .padding(.top, 8)
@@ -157,6 +152,58 @@ struct TodayView: View {
                 .font(.system(size: 10))
                 .foregroundStyle(Palette.textFaint)
         }
+    }
+
+    // MARK: - 饮水
+
+    private var waterCard: some View {
+        let ml = store.todayWaterMl()
+        let goal = max(store.state.waterGoalMl, 1)
+        return HStack(alignment: .center, spacing: 8) {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("饮水")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Palette.textDim)
+                HStack(alignment: .firstTextBaseline, spacing: 4) {
+                    Text("\(ml)")
+                        .font(.system(size: 40, weight: .bold, design: .rounded))
+                        .foregroundStyle(Palette.text)
+                    Text("ml")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(Palette.textDim)
+                }
+                Text("/ \(WaterLog.grouped(goal)) 毫升")
+                    .font(.system(size: 13))
+                    .foregroundStyle(Palette.textFaint)
+                HStack(spacing: 8) {
+                    waterStepButton(systemName: "minus") {
+                        store.addWater(delta: -WaterLog.stepMl)
+                    }
+                    Text("\(WaterLog.stepMl) 毫升")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(Palette.textDim)
+                        .frame(minWidth: 72)
+                    waterStepButton(systemName: "plus") {
+                        store.addWater(delta: WaterLog.stepMl)
+                    }
+                }
+            }
+            Spacer(minLength: 0)
+            WaterGauge(progress: Double(ml) / Double(goal))
+        }
+        .padding(18)
+        .card(radius: 24, fill: Palette.card, stroke: Palette.stroke)
+    }
+
+    private func waterStepButton(systemName: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: systemName)
+                .font(.system(size: 14, weight: .bold))
+                .foregroundStyle(Palette.text)
+                .frame(width: 36, height: 36)
+                .background(Circle().fill(Palette.cardHigh))
+        }
+        .buttonStyle(.plain)
     }
 
     // MARK: - 快捷入口
@@ -338,5 +385,41 @@ struct TodayView: View {
         if cal.isDateInYesterday(date) { return "昨天" }
         let days = cal.dateComponents([.day], from: date, to: Date()).day ?? 0
         return "\(days) 天前"
+    }
+}
+
+struct WaterGauge: View {
+    var progress: Double
+
+    var body: some View {
+        Canvas { context, size in
+            let ticks = 20
+            let center = CGPoint(x: size.width / 2, y: size.height - 2)
+            let radius = min(size.width / 2, size.height) - 8
+            let clamped = min(1, max(0, progress))
+            for index in 0...ticks {
+                let t = Double(index) / Double(ticks)
+                let angle = Double.pi + t * Double.pi
+                let inner = radius * 0.68
+                let outer = radius
+                var path = Path()
+                path.move(to: CGPoint(
+                    x: center.x + CGFloat(cos(angle)) * inner,
+                    y: center.y + CGFloat(sin(angle)) * inner
+                ))
+                path.addLine(to: CGPoint(
+                    x: center.x + CGFloat(cos(angle)) * outer,
+                    y: center.y + CGFloat(sin(angle)) * outer
+                ))
+                let lit = t <= clamped + 0.0001
+                context.stroke(
+                    path,
+                    with: .color(lit ? Palette.blue : Palette.stroke),
+                    style: StrokeStyle(lineWidth: 2.4, lineCap: .round)
+                )
+            }
+        }
+        .frame(width: 116, height: 74)
+        .accessibilityLabel("饮水进度")
     }
 }

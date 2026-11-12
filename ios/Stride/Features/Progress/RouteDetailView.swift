@@ -8,7 +8,6 @@ struct RouteDetailView: View {
     @State private var run: RouteRun
     @State private var showShare = false
     @State private var shareImage: UIImage?
-    @State private var showMembership = false
     @State private var toast: String?
 
     init(run: RouteRun) {
@@ -45,7 +44,6 @@ struct RouteDetailView: View {
                         .presentationDetents([.medium, .large])
                 }
             }
-            .membershipSheet($showMembership)
             .toast($toast)
         }
     }
@@ -187,19 +185,13 @@ struct RouteDetailView: View {
     }
 
     private func apply(_ style: RouteArtStyle) {
-        guard Gate.canUse(style: style) else {
-            showMembership = true
-            return
-        }
+        guard Gate.canUse(style: style) else { return }
         run.style = style
         store.updateRun(run)
     }
 
     private func apply(_ template: ShareTemplate) {
-        guard Gate.canUse(template: template) else {
-            showMembership = true
-            return
-        }
+        guard Gate.canUse(template: template) else { return }
         run.templateRaw = template.rawValue
         store.updateRun(run)
     }
