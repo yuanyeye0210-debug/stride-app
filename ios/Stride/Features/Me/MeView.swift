@@ -1,4 +1,21 @@
 import SwiftUI
+import UniformTypeIdentifiers
+
+/// 备份导出用的文件文档（系统保存框，存到文件 App）。
+private struct BackupFileDocument: FileDocument {
+    static var readableContentTypes: [UTType] { [.json] }
+    let data: Data
+
+    init(data: Data) { self.data = data }
+
+    init(configuration: ReadConfiguration) throws {
+        data = configuration.file.regularFileContents ?? Data()
+    }
+
+    func fileWrapper(configuration: WriteConfiguration) throws -> FileWrapper {
+        .init(regularFileWithContents: data)
+    }
+}
 
 struct MeView: View {
     @EnvironmentObject private var store: AppStore
@@ -8,6 +25,13 @@ struct MeView: View {
 
     @State private var toast: String?
     @State private var syncing = false
+    @State private var showExporter = false
+    @State private var exportDocument: BackupFileDocument?
+    @State private var showImporter = false
+    @State private var showImportConfirm = false
+    @State private var pendingImportData: Data?
+    @State private var showRestoreDialog = false
+    @State private var restoreCandidates: [URL] = []
 
     private var profile: Profile { store.state.profile }
 
@@ -29,6 +53,7 @@ struct MeView: View {
                     statsRow
                     accountSection
                     toolSection
+                    backupSection
                     aboutSection
                 }
                 .padding(.horizontal, Metrics.page)
@@ -39,6 +64,155 @@ struct MeView: View {
         .navigationBarTitleDisplayMode(.large)
         .toolbarBackground(Palette.bg, for: .navigationBar)
         .toast($toast)
+        .fileExporter(
+            isPresented: $showExporter,
+            document: exportDocument,
+            contentType: .json,
+            defaultFilename: AppStore.exportFileName()
+        ) { result in
+            if case .failure(let error) = result {
+                toast = error.localizedDescription
+            } else {
+                toast = "备份已保存"
+            }
+        }
+        .fileImporter(isPresented: $showImporter, allowedContentTypes: [.json]) { result in
+            switch result {
+            case .success(let url):
+                guard url.startAccessingSecurityScopedResource() else {
+                    toast = "打不开这个文件"
+                    return
+                }
+                defer { url.stopAccessingSecurityScopedResource() }
+                do {
+                    pendingImportData = try Data(contentsOf: url)
+                    showImportConfirm = true
+                } catch {
+                    toast = error.localizedDescription
+                }
+            case .failure(let error):
+                toast = error.localizedDescription
+            }
+        }
+        .alert("导入备份？", isPresented: $showImportConfirm) {
+            Button("替换全部数据", role: .destructive) { doImport() }
+            Button("取消", role: .cancel) { pendingImportData = nil }
+        } message: {
+            Text("导入会替换当前全部数据，当前数据会先自动备份。")
+        }
+        .confirmationDialog("恢复自动备份", isPresented: $showRestoreDialog) {
+            ForEach(restoreCandidates.prefix(3), id: \.self) { url in
+                Button(restoreDisplayName(url)) { restoreBackup(url) }
+            }
+            Button("取消", role: .cancel) {}
+        } message: {
+            Text("会先自动备份当前数据，再整体替换。")
+        }
+    }
+
+    // MARK: - 数据备份
+
+    private var dataIssueMessage: String? {
+        switch store.dataIssue {
+        case .corruptFileQuarantined(let name):
+            return "上次启动发现数据文件损坏，已隔离保存为 \(name)，原文件没有丢失。"
+        case .fieldsClamped(let names):
+            return "有几项身体数据超出合理范围，已按合理值修正（\(names.joined(separator: "、"))），你的训练记录都在。"
+        case .corruptFileKept:
+            return "数据文件损坏，隔离失败，已保留原文件，本次启动不会保存新数据。"
+        case .none:
+            return nil
+        }
+    }
+
+    private var autoBackups: [URL] { store.autoBackupURLs() }
+
+    private var backupSection: some View {
+        VStack(spacing: 0) {
+            if let message = dataIssueMessage {
+                HStack(alignment: .top, spacing: 9) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.system(size: 13))
+                        .foregroundStyle(Palette.red)
+                    Text(message)
+                        .font(.system(size: 12.5))
+                        .foregroundStyle(Palette.textDim)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Spacer(minLength: 4)
+                    Button {
+                        store.dataIssue = nil
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundStyle(Palette.textFaint)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("知道了")
+                }
+                .padding(13)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                divider
+            }
+
+            Button {
+                do {
+                    exportDocument = BackupFileDocument(data: try store.exportData())
+                    showExporter = true
+                } catch {
+                    toast = error.localizedDescription
+                }
+            } label: {
+                SettingRow(icon: "square.and.arrow.up", title: "导出备份", value: "JSON", tint: Palette.blue)
+            }
+            .buttonStyle(.plain)
+
+            divider
+
+            Button {
+                showImporter = true
+            } label: {
+                SettingRow(icon: "square.and.arrow.down", title: "导入备份", value: "JSON", tint: Palette.green)
+            }
+            .buttonStyle(.plain)
+
+            if !autoBackups.isEmpty {
+                divider
+
+                Button {
+                    restoreCandidates = autoBackups
+                    showRestoreDialog = true
+                } label: {
+                    SettingRow(icon: "arrow.counterclockwise", title: "恢复自动备份", value: "\(autoBackups.count) 个", tint: Palette.amber)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .card(radius: 22, fill: Palette.card, stroke: Palette.stroke)
+    }
+
+    private func restoreDisplayName(_ url: URL) -> String {
+        url.deletingPathExtension().lastPathComponent
+            .replacingOccurrences(of: "state.backup-before-import-", with: "")
+    }
+
+    private func restoreBackup(_ url: URL) {
+        do {
+            try store.importData(Data(contentsOf: url))
+            toast = "已恢复备份"
+        } catch {
+            toast = error.localizedDescription
+        }
+    }
+
+    private func doImport() {
+        guard let data = pendingImportData else { return }
+        pendingImportData = nil
+        do {
+            try store.importData(data)
+            toast = "备份已导入"
+        } catch {
+            toast = error.localizedDescription
+        }
     }
 
     // MARK: - 资料

@@ -42,6 +42,23 @@ final class WaterAndWeekTests: XCTestCase {
         XCTAssertEqual(loaded.state.waterGoalMl, 1800)
     }
 
+    func testWaterRoundTripKeepsMultipleDaysAndGoal() {
+        let url = temporaryStateURL()
+        let store = AppStore(fileURL: url)
+        let day1 = Date(timeIntervalSince1970: 1_700_000_000)
+        let day2 = Date(timeIntervalSince1970: 1_700_000_000 + 86_400)
+        store.state.waterGoalMl = 2000
+        store.addWater(delta: 1000, now: day1)
+        store.addWater(delta: 500, now: day2)
+        store.saveNow()
+
+        let loaded = AppStore(fileURL: url)
+        XCTAssertEqual(loaded.todayWaterMl(now: day1), 1000)
+        XCTAssertEqual(loaded.todayWaterMl(now: day2), 500)
+        XCTAssertEqual(loaded.state.waterGoalMl, 2000)
+        XCTAssertEqual(loaded.state.waterDays.count, 2)
+    }
+
     func testLegacyFileWithoutWaterStillLoads() throws {
         let url = temporaryStateURL()
         let store = AppStore(fileURL: url)

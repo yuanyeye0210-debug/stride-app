@@ -9,9 +9,15 @@ final class AppStore: ObservableObject {
         didSet { scheduleSave() }
     }
 
+    /// 启动时发现的数据问题（例如 state.json 损坏已被隔离）。平时为 nil。
+    @Published var dataIssue: DataIssue?
+
     private let fileURL: URL
     private var saveTask: Task<Void, Never>?
     private let calendar = Calendar.current
+
+    /// 隔离失败（原损坏文件还在原地）时为 true：本次启动不保存，避免覆盖原文件。
+    private var saveSuppressed = false
 
     // MARK: - 生命周期
 
@@ -27,20 +33,52 @@ final class AppStore: ObservableObject {
         }
         try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
         self.fileURL = url
+        self.dataIssue = nil
+
+        // 分流：解不开才算损坏（隔离）；能解码但个别字段越界时加载并修正，
+        // 不隔离、不丢记录——身高/体重是用户手填的，填错一个数不能丢全部历史。
+        var loaded: AppState? = nil
+        var clampedFields: [String]? = nil
+        if let data = try? Data(contentsOf: url),
+           let decoded = try? Self.decoder().decode(AppState.self, from: data) {
+            if (try? Backup.validate(decoded)) != nil {
+                loaded = decoded
+            } else {
+                let (fixed, names) = Backup.clamped(decoded)
+                loaded = fixed
+                clampedFields = names
+            }
+        }
 
         let fileExists = FileManager.default.fileExists(atPath: url.path)
         let preserveFile: Bool
-        if let data = try? Data(contentsOf: url),
-           let decoded = try? Self.decoder().decode(AppState.self, from: data) {
+        if let decoded = loaded {
             self.state = decoded
+            if let names = clampedFields, !names.isEmpty {
+                self.dataIssue = .fieldsClamped(names)
+            }
             preserveFile = false
         } else if fileExists {
-            // 文件在但读不出来时，绝不把演示数据写回去。
-            print("[Stride] state.json 无法读取，已保留原文件，没有写入演示数据")
-            var preserved = AppState()
-            preserved.seeded = true
-            self.state = preserved
-            preserveFile = true
+            // 文件在但读不出来：改名隔离，永不删除、永不覆盖。
+            // 隔离成功后可以正常建一个新 state.json；隔离失败才保留原文件不动。
+            let name = Backup.quarantineName()
+            let dest = url.deletingLastPathComponent().appendingPathComponent(name)
+            if (try? FileManager.default.moveItem(at: url, to: dest)) != nil {
+                print("[Stride] state.json 无法读取，已隔离为 \(name)，没有删除原文件")
+                self.dataIssue = .corruptFileQuarantined(quarantinedName: name)
+                var fresh = AppState()
+                fresh.seeded = true
+                self.state = fresh
+                preserveFile = false
+            } else {
+                print("[Stride] state.json 无法读取，隔离失败，已保留原文件，本次启动不保存")
+                self.saveSuppressed = true
+                self.dataIssue = .corruptFileKept
+                var preserved = AppState()
+                preserved.seeded = true
+                self.state = preserved
+                preserveFile = true
+            }
         } else {
             self.state = AppState()
             preserveFile = false
@@ -48,6 +86,9 @@ final class AppStore: ObservableObject {
 
         if !preserveFile {
             var needsSave = false
+            if let names = clampedFields, !names.isEmpty {
+                needsSave = true // 尽快把修正后的字段写回去
+            }
             if !state.seeded {
                 SeedData.seed(&state)
                 state.seeded = true
@@ -87,12 +128,58 @@ final class AppStore: ObservableObject {
     }
 
     func saveNow() {
+        guard !saveSuppressed else {
+            print("[Stride] save suppressed: corrupt file kept in place")
+            return
+        }
         do {
             let data = try Self.encoder().encode(state)
             try data.write(to: fileURL, options: .atomic)
         } catch {
             print("[Stride] save failed:", error)
         }
+    }
+
+    // MARK: - 备份：导出 / 导入
+
+    /// 导出当前全部数据（带版本号的信封）。只编码，不写盘、不改 state。
+    func exportData() throws -> Data {
+        try Backup.encode(state)
+    }
+
+    static func exportFileName(date: Date = Date(), timeZone: TimeZone = .current) -> String {
+        Backup.exportFileName(date: date, timeZone: timeZone)
+    }
+
+    /// 导入备份：先校验（失败直接抛，原数据不动），再自动备份当前数据，
+    /// 最后整体替换。导入的是整体替换，不是合并。
+    /// 导入的数据本身就是真实用户数据，强制 seeded = true，绝不能触发演示播种。
+    func importData(_ data: Data) throws {
+        var imported = try Backup.decode(data)
+        imported.seeded = true
+        _ = try backupCurrentStateBeforeImport()
+        state = imported
+        saveNow()
+    }
+
+    /// 把当前 state 写一份带时间戳的备份到 state.json 同目录，原子写入。
+    @discardableResult
+    func backupCurrentStateBeforeImport() throws -> URL {
+        let dest = fileURL
+            .deletingLastPathComponent()
+            .appendingPathComponent(Backup.backupBeforeImportName())
+        try Backup.encode(state).write(to: dest, options: .atomic)
+        return dest
+    }
+
+    /// 同目录下的导入前自动备份，按文件名倒序（时间戳命名，文件名即时间顺序）。
+    func autoBackupURLs() -> [URL] {
+        let dir = fileURL.deletingLastPathComponent()
+        guard let names = try? FileManager.default.contentsOfDirectory(atPath: dir.path) else { return [] }
+        return names
+            .filter { $0.hasPrefix("state.backup-before-import-") }
+            .sorted(by: >)
+            .map { dir.appendingPathComponent($0) }
     }
 
     // MARK: - 派生数据

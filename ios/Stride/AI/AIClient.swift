@@ -143,10 +143,15 @@ final class AISettings: ObservableObject {
 
 // MARK: - 错误
 
-enum AIError: LocalizedError {
+enum AIError: LocalizedError, Equatable {
     case notConfigured
     case badResponse(String)
     case http(Int, String)
+    case timeout
+    case offline
+    case serverBusy
+    case rateLimited
+    case imageTooLarge
 
     var errorDescription: String? {
         switch self {
@@ -156,6 +161,16 @@ enum AIError: LocalizedError {
             return "返回格式不对：\(s)"
         case .http(let code, let body):
             return "HTTP \(code)：\(body.prefix(160))"
+        case .timeout:
+            return "请求超时了，请检查网络后重试。"
+        case .offline:
+            return "现在没网，检查网络后重试。本地教练仍可用。"
+        case .serverBusy:
+            return "对方服务正忙，请稍后再试。"
+        case .rateLimited:
+            return "请求太频繁了，稍等一下再试。"
+        case .imageTooLarge:
+            return "这张图太大了，换一张小一点的再试。"
         }
     }
 }
@@ -228,7 +243,8 @@ struct AIClient {
         messages: [Message],
         model: String,
         config: AIConfig,
-        maxTokens: Int = 700
+        maxTokens: Int = 700,
+        onRetry: (@MainActor (Int) -> Void)? = nil
     ) async throws -> String {
         guard config.isConfigured else { throw AIError.notConfigured }
 
@@ -245,7 +261,7 @@ struct AIClient {
             max_tokens: maxTokens
         )
 
-        return try await send(body, config: config)
+        return try await send(body, config: config, onRetry: onRetry)
     }
 
     static func chat(
@@ -253,14 +269,16 @@ struct AIClient {
         user: String,
         config: AIConfig,
         model: String? = nil,
-        maxTokens: Int = 700
+        maxTokens: Int = 700,
+        onRetry: (@MainActor (Int) -> Void)? = nil
     ) async throws -> String {
         try await complete(
             system: system,
             messages: [Message(role: "user", content: .text(user))],
             model: model ?? config.chatModel,
             config: config,
-            maxTokens: maxTokens
+            maxTokens: maxTokens,
+            onRetry: onRetry
         )
     }
 
@@ -268,10 +286,12 @@ struct AIClient {
         imageBase64JPEG: String,
         prompt: String,
         config: AIConfig,
-        maxTokens: Int = 800
+        maxTokens: Int = 800,
+        onRetry: (@MainActor (Int) -> Void)? = nil
     ) async throws -> String {
+        try VisionImageLimits.validateBase64Length(imageBase64JPEG)
         let body = visionRequest(imageBase64JPEG: imageBase64JPEG, prompt: prompt, config: config, maxTokens: maxTokens)
-        return try await send(body, config: config)
+        return try await send(body, config: config, onRetry: onRetry)
     }
 
     /// 视觉请求的 JSON，image_url 是 `{ "url": "data:image/jpeg;base64,..." }`。
@@ -281,6 +301,7 @@ struct AIClient {
         config: AIConfig,
         maxTokens: Int = 800
     ) throws -> Data {
+        try VisionImageLimits.validateBase64Length(imageBase64JPEG)
         try JSONEncoder().encode(visionRequest(imageBase64JPEG: imageBase64JPEG, prompt: prompt, config: config, maxTokens: maxTokens))
     }
 
@@ -308,7 +329,7 @@ struct AIClient {
 
     // MARK: - 传输
 
-    private static func send(_ body: ChatRequest, config: AIConfig) async throws -> String {
+    private static func send(_ body: ChatRequest, config: AIConfig, onRetry: (@MainActor (Int) -> Void)? = nil) async throws -> String {
         var urlString = config.baseURL.trimmingCharacters(in: .whitespacesAndNewlines)
         if urlString.hasSuffix("/") { urlString.removeLast() }
         if !urlString.hasSuffix("/chat/completions") { urlString += "/chat/completions" }
@@ -319,25 +340,54 @@ struct AIClient {
 
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
-        request.timeoutInterval = 60
+        request.timeoutInterval = AIRetryPolicy.timeoutInterval
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("Bearer \(config.apiKey)", forHTTPHeaderField: "Authorization")
         request.httpBody = try JSONEncoder().encode(body)
 
-        let (data, response) = try await URLSession.shared.data(for: request)
-        guard let http = response as? HTTPURLResponse else {
-            throw AIError.badResponse("没有 HTTP 响应")
-        }
-        guard (200..<300).contains(http.statusCode) else {
-            let text = String(data: data, encoding: .utf8) ?? ""
-            throw AIError.http(http.statusCode, text)
-        }
+        // 只重试瞬时错误（超时、断网、对方忙、限流），最多 3 次，退避 1 秒、2 秒。
+        var attempt = 0
+        while true {
+            attempt += 1
+            do {
+                let (data, response) = try await URLSession.shared.data(for: request)
+                guard let http = response as? HTTPURLResponse else {
+                    throw AIError.badResponse("没有 HTTP 响应")
+                }
+                guard (200..<300).contains(http.statusCode) else {
+                    let text = String(data: data, encoding: .utf8) ?? ""
+                    throw AIRetryPolicy.mapHTTPStatus(http.statusCode, body: text)
+                }
 
-        let decoded = try JSONDecoder().decode(ChatResponse.self, from: data)
-        guard let text = decoded.choices.first?.message.content, !text.isEmpty else {
-            throw AIError.badResponse("choices 为空")
+                let decoded = try JSONDecoder().decode(ChatResponse.self, from: data)
+                guard let text = decoded.choices.first?.message.content, !text.isEmpty else {
+                    throw AIError.badResponse("choices 为空")
+                }
+                return text.trimmingCharacters(in: .whitespacesAndNewlines)
+            } catch is CancellationError {
+                throw
+            } catch let aiError as AIError {
+                if AIRetryPolicy.shouldRetry(error: aiError, attempt: attempt) {
+                    // 先告诉界面下一轮是第几次，再退避等一会儿。
+                    await MainActor.run { onRetry?(attempt + 1) }
+                    try await Task.sleep(nanoseconds: UInt64(AIRetryPolicy.backoffDelay(attempt: attempt) * 1_000_000_000))
+                    continue
+                }
+                throw aiError
+            } catch {
+                // 有些 Foundation 版本把取消报成 URLError(.cancelled) 而不是 CancellationError。
+                if let urlError = error as? URLError, urlError.code == .cancelled {
+                    throw CancellationError()
+                }
+                let mapped = AIRetryPolicy.mapNetworkError(error, statusCode: nil)
+                if AIRetryPolicy.shouldRetry(error: mapped, attempt: attempt) {
+                    await MainActor.run { onRetry?(attempt + 1) }
+                    try await Task.sleep(nanoseconds: UInt64(AIRetryPolicy.backoffDelay(attempt: attempt) * 1_000_000_000))
+                    continue
+                }
+                throw mapped
+            }
         }
-        return text.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 }
 
