@@ -151,7 +151,7 @@ enum AIError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .notConfigured:
-            return "还没有配置 AI 服务。到「我的 → AI 服务」填一个 OpenAI 兼容的地址和 Key。"
+            return "还没有配置 AI 服务。到「自己 → AI 服务」填一个 OpenAI 兼容的地址和 Key。"
         case .badResponse(let s):
             return "返回格式不对：\(s)"
         case .http(let code, let body):

@@ -6,7 +6,6 @@ struct MeView: View {
     @EnvironmentObject private var health: HealthKitManager
     @EnvironmentObject private var watch: WatchSession
 
-    @State private var showMembership = false
     @State private var toast: String?
     @State private var syncing = false
 
@@ -27,7 +26,6 @@ struct MeView: View {
             ScrollView(showsIndicators: false) {
                 VStack(spacing: 14) {
                     profileCard
-                    membershipBanner
                     statsRow
                     accountSection
                     toolSection
@@ -37,10 +35,9 @@ struct MeView: View {
                 .padding(.bottom, 30)
             }
         }
-        .navigationTitle("我的")
+        .navigationTitle("自己")
         .navigationBarTitleDisplayMode(.large)
         .toolbarBackground(Palette.bg, for: .navigationBar)
-        .membershipSheet($showMembership)
         .toast($toast)
     }
 
@@ -75,51 +72,6 @@ struct MeView: View {
             }
             .padding(16)
             .card(radius: 24, fill: Palette.card, stroke: Palette.stroke)
-        }
-        .buttonStyle(.plain)
-    }
-
-    // MARK: - 会员
-
-    private var membershipBanner: some View {
-        Button {
-            showMembership = true
-        } label: {
-            HStack(spacing: 14) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .fill(Color.white.opacity(0.12))
-                        .frame(width: 44, height: 44)
-                    Image(systemName: "crown.fill")
-                        .font(.system(size: 17, weight: .bold))
-                        .foregroundStyle(.white)
-                }
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(store.state.membership.tier == .max ? "\(Brand.tierMax) 已解锁" : "升级到 \(Brand.tierMax)")
-                        .font(.system(size: 15, weight: .bold))
-                        .foregroundStyle(.white)
-                    Text("AI 不限次数 · 全部画风 · 全部模板")
-                        .font(.system(size: 11))
-                        .foregroundStyle(.white.opacity(0.75))
-                }
-                Spacer()
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(.white.opacity(0.7))
-            }
-            .padding(16)
-            .background(
-                RoundedRectangle(cornerRadius: 24, style: .continuous)
-                    .fill(LinearGradient(
-                        colors: [Color(hex: 0x1E3A28), Color(hex: 0x14202A)],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    ))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 24, style: .continuous)
-                    .strokeBorder(Palette.green.opacity(0.28), lineWidth: 1)
-            )
         }
         .buttonStyle(.plain)
     }

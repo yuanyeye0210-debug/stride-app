@@ -24,7 +24,7 @@ struct TrainingHomeView: View {
                 .padding(.bottom, 28)
             }
         }
-        .navigationTitle("训练")
+        .navigationTitle("计划")
         .navigationBarTitleDisplayMode(.large)
         .toolbarBackground(Palette.bg, for: .navigationBar)
         .sheet(isPresented: $showSession, onDismiss: { draft = nil }) {

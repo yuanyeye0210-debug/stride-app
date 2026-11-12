@@ -17,6 +17,8 @@ enum Brand {
 /// 想真做订阅时把它设为 false，并把 PurchaseService 换成 StoreKit 2 实现。
 enum LaunchFlags {
     static let everythingUnlocked = true
-    static let showMembershipEntry = true
-    static let simulateWatch = true
+    /// 会员墙已去掉，不再提供入口。
+    static let showMembershipEntry = false
+    /// 启动时不模拟手表连接，避免出现假的在线状态。
+    static let simulateWatch = false
 }

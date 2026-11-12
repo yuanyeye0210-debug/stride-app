@@ -31,7 +31,7 @@ struct ProgressViewScreen: View {
                 .padding(.bottom, 28)
             }
         }
-        .navigationTitle("进度")
+        .navigationTitle("记录")
         .navigationBarTitleDisplayMode(.large)
         .toolbarBackground(Palette.bg, for: .navigationBar)
         .sheet(item: $selectedRun) { run in

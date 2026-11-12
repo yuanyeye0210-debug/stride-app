@@ -8,7 +8,6 @@ struct TodayView: View {
     @State private var showFoodSheet = false
     @State private var showRunSheet = false
     @State private var showCoachSheet = false
-    @State private var showMembership = false
     @State private var healthMetrics: HealthKitManager.DayMetrics?
 
     private var profile: Profile { store.state.profile }
@@ -63,7 +62,6 @@ struct TodayView: View {
         .sheet(isPresented: $showCoachSheet) {
             NavigationStack { CoachView() }
         }
-        .membershipSheet($showMembership)
     }
 
     // MARK: - 头部
@@ -83,20 +81,16 @@ struct TodayView: View {
             }
             Spacer()
             Button {
-                showMembership = true
+                showCoachSheet = true
             } label: {
-                HStack(spacing: 5) {
-                    Image(systemName: "crown.fill")
-                        .font(.system(size: 11, weight: .bold))
-                    Text(store.state.membership.tier == .max ? "MAX" : "升级")
-                        .font(.system(size: 11, weight: .heavy))
-                }
-                .foregroundStyle(Color.black)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 6)
-                .background(Capsule().fill(Color.white))
+                Image(systemName: "sparkles")
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundStyle(Color.black)
+                    .frame(width: 40, height: 40)
+                    .background(Circle().fill(Color.white))
             }
             .buttonStyle(.plain)
+            .accessibilityLabel("教练")
             .padding(.top, 6)
         }
         .padding(.top, 8)
