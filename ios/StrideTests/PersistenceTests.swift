@@ -34,17 +34,17 @@ final class PersistenceTests: XCTestCase {
         store.saveNow()
 
         let loaded = AppStore(fileURL: url)
-        let loadedSession = loaded.state.sessions.first { $0.id == session.id }
-        XCTAssertEqual(loadedSession?.title, "往返训练")
-        XCTAssertEqual(loadedSession?.date.timeIntervalSince1970, when.timeIntervalSince1970, accuracy: 1)
+        let loadedSession = try XCTUnwrap(loaded.state.sessions.first { $0.id == session.id })
+        XCTAssertEqual(loadedSession.title, "往返训练")
+        XCTAssertEqual(loadedSession.date.timeIntervalSince1970, when.timeIntervalSince1970, accuracy: 1)
 
-        let loadedFood = loaded.state.foods.first { $0.id == food.id }
-        XCTAssertEqual(loadedFood?.items.first?.name, "米饭")
-        XCTAssertEqual(loadedFood?.kcal, 230, accuracy: 0.01)
+        let loadedFood = try XCTUnwrap(loaded.state.foods.first { $0.id == food.id })
+        XCTAssertEqual(loadedFood.items.first?.name, "米饭")
+        XCTAssertEqual(loadedFood.kcal, 230, accuracy: 0.01)
 
-        let loadedRun = loaded.state.runs.first { $0.id == run.id }
-        XCTAssertEqual(loadedRun?.title, "往返夜跑")
-        XCTAssertEqual(loadedRun?.distanceM, 3200, accuracy: 0.01)
+        let loadedRun = try XCTUnwrap(loaded.state.runs.first { $0.id == run.id })
+        XCTAssertEqual(loadedRun.title, "往返夜跑")
+        XCTAssertEqual(loadedRun.distanceM, 3200, accuracy: 0.01)
 
         XCTAssertEqual(loaded.state.sessions.count, store.state.sessions.count)
         XCTAssertEqual(loaded.state.foods.count, store.state.foods.count)
