@@ -128,6 +128,11 @@ final class AppStore: ObservableObject {
     }
 
     func saveNow() {
+        // 显式保存取代待处理的防抖保存：否则防抖任务 350ms 后触发时，
+        // 会把调用 saveNow() 时的旧 state 重新写回文件，覆盖其间别的
+        // AppStore 实例已经修正并写回的值（例如越界字段被钳制后又变回越界）。
+        saveTask?.cancel()
+        saveTask = nil
         guard !saveSuppressed else {
             print("[Stride] save suppressed: corrupt file kept in place")
             return

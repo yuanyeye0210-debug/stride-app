@@ -223,6 +223,37 @@ final class BackupTests: XCTestCase {
         XCTAssertEqual(clamped.dailyKcalGoal, 2200)
     }
 
+    // MARK: - CI 红修复：显式 saveNow() 取消待处理的防抖保存
+
+    func testSaveNowCancelsPendingDebouncedSave() async throws {
+        let url = temporaryStateURL()
+        let store = AppStore(fileURL: url)
+        store.state.profile.weightKg = 0
+        store.state.profile.heightCm = 400
+        store.saveNow()
+
+        // 第二个实例加载并修正越界字段，修正后的值写回文件。
+        let loaded = AppStore(fileURL: url)
+        XCTAssertEqual(loaded.state.profile.weightKg, 20, accuracy: 0.01)
+        XCTAssertEqual(loaded.state.profile.heightCm, 250, accuracy: 0.01)
+
+        // 等超过 350ms 防抖窗口：旧代码下第一个实例的防抖任务会在此期间
+        // 把坏值重新写回文件；新代码下 saveNow() 已取消它，文件保持修正后的值。
+        // 等 1000ms，留足裕量，避免 CI 负载高时防抖任务执行被拖到重读之后。
+        try await Task.sleep(nanoseconds: 1_000_000_000)
+
+        // 锚定 store 的生命期覆盖等待期：防抖任务以 [weak self] 捕获 store，
+        // 若编译器在最后一次使用后提前释放它，旧代码下测试会误通过。
+        // 内存里的值仍是坏值，修的是文件，不是内存。
+        XCTAssertEqual(store.state.profile.weightKg, 0, accuracy: 0.01)
+        XCTAssertEqual(store.state.profile.heightCm, 400, accuracy: 0.01)
+
+        let reloaded = AppStore(fileURL: url)
+        XCTAssertEqual(reloaded.state.profile.weightKg, 20, accuracy: 0.01)
+        XCTAssertEqual(reloaded.state.profile.heightCm, 250, accuracy: 0.01)
+        XCTAssertNil(reloaded.dataIssue)
+    }
+
     // MARK: - 评审修复 I2：导入强制 seeded，避免演示播种
 
     func testImportForcesSeededTrue() throws {
