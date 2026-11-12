@@ -28,9 +28,16 @@ final class AppStore: ObservableObject {
         try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
         self.fileURL = url
 
+        let fileExists = FileManager.default.fileExists(atPath: url.path)
         if let data = try? Data(contentsOf: url),
            let decoded = try? Self.decoder().decode(AppState.self, from: data) {
             self.state = decoded
+        } else if fileExists {
+            // 文件在但读不出来时，绝不把演示数据写回去。
+            print("[Stride] state.json 无法读取，已保留原文件，没有写入演示数据")
+            var preserved = AppState()
+            preserved.seeded = true
+            self.state = preserved
         } else {
             self.state = AppState()
         }
@@ -48,9 +55,10 @@ final class AppStore: ObservableObject {
         return enc
     }
 
-    /// 与保存策略不一致：ISO8601 字符串无法用默认日期解码读回。
     static func decoder() -> JSONDecoder {
-        JSONDecoder()
+        let dec = JSONDecoder()
+        dec.dateDecodingStrategy = .iso8601
+        return dec
     }
 
     // MARK: - 持久化
