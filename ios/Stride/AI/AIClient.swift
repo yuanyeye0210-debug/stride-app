@@ -365,7 +365,7 @@ struct AIClient {
                 }
                 return text.trimmingCharacters(in: .whitespacesAndNewlines)
             } catch is CancellationError {
-                throw
+                throw CancellationError()
             } catch let aiError as AIError {
                 if AIRetryPolicy.shouldRetry(error: aiError, attempt: attempt) {
                     // 先告诉界面下一轮是第几次，再退避等一会儿。
