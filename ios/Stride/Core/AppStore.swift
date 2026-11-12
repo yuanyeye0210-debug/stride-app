@@ -15,16 +15,21 @@ final class AppStore: ObservableObject {
 
     // MARK: - 生命周期
 
-    init() {
-        let fm = FileManager.default
-        let dir = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("Stride", isDirectory: true)
-        try? fm.createDirectory(at: dir, withIntermediateDirectories: true)
-        let url = dir.appendingPathComponent("state.json")
+    /// 测试传入临时文件；正式启动不传，仍写到 Application Support。
+    init(fileURL: URL? = nil) {
+        let url: URL
+        if let fileURL {
+            url = fileURL
+        } else {
+            let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+                .appendingPathComponent("Stride", isDirectory: true)
+            url = base.appendingPathComponent("state.json")
+        }
+        try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
         self.fileURL = url
 
         if let data = try? Data(contentsOf: url),
-           let decoded = try? JSONDecoder().decode(AppState.self, from: data) {
+           let decoded = try? Self.decoder().decode(AppState.self, from: data) {
             self.state = decoded
         } else {
             self.state = AppState()
@@ -35,6 +40,17 @@ final class AppStore: ObservableObject {
             state.seeded = true
             saveNow()
         }
+    }
+
+    static func encoder() -> JSONEncoder {
+        let enc = JSONEncoder()
+        enc.dateEncodingStrategy = .iso8601
+        return enc
+    }
+
+    /// 与保存策略不一致：ISO8601 字符串无法用默认日期解码读回。
+    static func decoder() -> JSONDecoder {
+        JSONDecoder()
     }
 
     // MARK: - 持久化
@@ -50,9 +66,7 @@ final class AppStore: ObservableObject {
 
     func saveNow() {
         do {
-            let enc = JSONEncoder()
-            enc.dateEncodingStrategy = .iso8601
-            let data = try enc.encode(state)
+            let data = try Self.encoder().encode(state)
             try data.write(to: fileURL, options: .atomic)
         } catch {
             print("[Stride] save failed:", error)

@@ -41,3 +41,17 @@ targets:
         TARGETED_DEVICE_FAMILY: "1,2"
         ENABLE_PREVIEWS: YES
         CODE_SIGN_STYLE: Automatic
+  StrideTests:
+    type: bundle.unit-test
+    platform: iOS
+    deploymentTarget: "17.0"
+    sources:
+      - path: StrideTests
+    dependencies:
+      - target: Stride
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.yg.stride.tests
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/Stride.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Stride"
+        BUNDLE_LOADER: "$(TEST_HOST)"
