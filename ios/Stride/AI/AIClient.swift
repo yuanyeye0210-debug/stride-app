@@ -72,7 +72,7 @@ struct AIClient {
 
         enum Content: Encodable {
             case text(String)
-            case parts([[String: String]])
+            case parts([ContentPart])
 
             func encode(to encoder: Encoder) throws {
                 var c = encoder.singleValueContainer()
@@ -82,6 +82,28 @@ struct AIClient {
                 case .parts(let p):
                     try c.encode(p)
                 }
+            }
+        }
+
+        struct ContentPart: Encodable {
+            let type: String
+            var text: String?
+            var imageURL: ImageURL?
+
+            struct ImageURL: Encodable {
+                let url: String
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case type, text
+                case imageURL = "image_url"
+            }
+
+            func encode(to encoder: Encoder) throws {
+                var c = encoder.container(keyedBy: CodingKeys.self)
+                try c.encode(type, forKey: .type)
+                try c.encodeIfPresent(text, forKey: .text)
+                try c.encodeIfPresent(imageURL, forKey: .imageURL)
             }
         }
     }
@@ -148,11 +170,11 @@ struct AIClient {
         config: AIConfig,
         maxTokens: Int = 800
     ) async throws -> String {
-        let body = try visionRequest(imageBase64JPEG: imageBase64JPEG, prompt: prompt, config: config, maxTokens: maxTokens)
+        let body = visionRequest(imageBase64JPEG: imageBase64JPEG, prompt: prompt, config: config, maxTokens: maxTokens)
         return try await send(body, config: config)
     }
 
-    /// 视觉请求的 JSON。当前把 image_url 编成字符串，和 chat completions 要求的 `{url}` 对象不一致。
+    /// 视觉请求的 JSON，image_url 是 `{ "url": "data:image/jpeg;base64,..." }`。
     static func visionRequestJSON(
         imageBase64JPEG: String,
         prompt: String,
@@ -168,9 +190,13 @@ struct AIClient {
         config: AIConfig,
         maxTokens: Int
     ) -> ChatRequest {
-        let parts: [[String: String]] = [
-            ["type": "text", "text": prompt],
-            ["type": "image_url", "image_url": "data:image/jpeg;base64,\(imageBase64JPEG)"]
+        let parts: [Message.ContentPart] = [
+            Message.ContentPart(type: "text", text: prompt, imageURL: nil),
+            Message.ContentPart(
+                type: "image_url",
+                text: nil,
+                imageURL: Message.ContentPart.ImageURL(url: "data:image/jpeg;base64,\(imageBase64JPEG)")
+            )
         ]
         return ChatRequest(
             model: config.visionModel,
