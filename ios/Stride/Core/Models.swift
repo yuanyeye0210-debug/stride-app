@@ -426,12 +426,15 @@ enum WaterLog {
     }
 
     static func grouped(_ value: Int) -> String {
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .decimal
-        formatter.usesGroupingSeparator = true
-        formatter.groupingSeparator = ","
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        return formatter.string(from: NSNumber(value: value)) ?? "\(value)"
+        let digits = String(abs(value))
+        var parts: [String] = []
+        var rest = digits
+        while rest.count > 3 {
+            parts.insert(String(rest.suffix(3)), at: 0)
+            rest.removeLast(3)
+        }
+        if !rest.isEmpty { parts.insert(rest, at: 0) }
+        return parts.joined(separator: ",")
     }
 }
 
