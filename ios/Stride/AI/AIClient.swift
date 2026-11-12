@@ -148,16 +148,35 @@ struct AIClient {
         config: AIConfig,
         maxTokens: Int = 800
     ) async throws -> String {
+        let body = try visionRequest(imageBase64JPEG: imageBase64JPEG, prompt: prompt, config: config, maxTokens: maxTokens)
+        return try await send(body, config: config)
+    }
+
+    /// 视觉请求的 JSON。当前把 image_url 编成字符串，和 chat completions 要求的 `{url}` 对象不一致。
+    static func visionRequestJSON(
+        imageBase64JPEG: String,
+        prompt: String,
+        config: AIConfig,
+        maxTokens: Int = 800
+    ) throws -> Data {
+        try JSONEncoder().encode(visionRequest(imageBase64JPEG: imageBase64JPEG, prompt: prompt, config: config, maxTokens: maxTokens))
+    }
+
+    private static func visionRequest(
+        imageBase64JPEG: String,
+        prompt: String,
+        config: AIConfig,
+        maxTokens: Int
+    ) -> ChatRequest {
         let parts: [[String: String]] = [
             ["type": "text", "text": prompt],
             ["type": "image_url", "image_url": "data:image/jpeg;base64,\(imageBase64JPEG)"]
         ]
-        return try await complete(
-            system: nil,
-            messages: [Message(role: "user", content: .parts(parts))],
+        return ChatRequest(
             model: config.visionModel,
-            config: config,
-            maxTokens: maxTokens
+            messages: [Message(role: "user", content: .parts(parts))],
+            temperature: config.temperature,
+            max_tokens: maxTokens
         )
     }
 
