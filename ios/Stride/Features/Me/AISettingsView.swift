@@ -57,11 +57,17 @@ struct AISettingsView: View {
     }
 
     private var note: some View {
-        HStack(alignment: .top, spacing: 9) {
-            Image(systemName: "info.circle.fill")
-                .font(.system(size: 13))
-                .foregroundStyle(Palette.blue)
-            Text("不填也能用：教练会切到本地规则引擎，热量识别可以手动记录。填好之后所有 AI 功能才接真模型。")
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .top, spacing: 9) {
+                Image(systemName: "info.circle.fill")
+                    .font(.system(size: 13))
+                    .foregroundStyle(Palette.blue)
+                Text("不填也能用：教练会切到本地规则引擎，热量识别可以手动记录。填好之后所有 AI 功能才接真模型。")
+                    .font(.system(size: 12.5))
+                    .foregroundStyle(Palette.textDim)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Text("你填的接口地址和 Key 只保存在这台手机上（Key 在钥匙串里）。每次问教练或识别热量时，App 会把你的问题、最近的训练和饮食记录、以及你选的照片，直接发到你填的这个接口，不经过 Stride 或 Muse 的服务器。换接口或删 Key 后就不再发送。")
                 .font(.system(size: 12.5))
                 .foregroundStyle(Palette.textDim)
                 .fixedSize(horizontal: false, vertical: true)

@@ -11,6 +11,7 @@ struct FoodScanView: View {
     @State private var items: [FoodItem] = []
     @State private var meal: Meal = .lunch
     @State private var busy = false
+    @State private var retryAttempt: Int?
     @State private var errorText: String?
     @State private var query = ""
     @State private var showSettings = false
@@ -103,7 +104,8 @@ struct FoodScanView: View {
                 if busy {
                     ProgressView()
                         .tint(Palette.green)
-                    Text("正在识别…")
+                    // 有重试时显示第几次重试，替代“正在识别…”。
+                    Text(retryAttempt.map { AIRetryPolicy.retryStatusText(nextAttempt: $0) ?? "重试中…" } ?? "正在识别…")
                         .font(.system(size: 14, weight: .medium))
                         .foregroundStyle(Palette.textDim)
                 } else {
@@ -316,7 +318,7 @@ struct FoodScanView: View {
         }
 
         busy = true
-        defer { busy = false }
+        defer { busy = false; retryAttempt = nil }
 
         do {
             guard let data = try await item.loadTransferable(type: Data.self),
@@ -324,7 +326,8 @@ struct FoodScanView: View {
                 errorText = "读不到这张图"
                 return
             }
-            let result = try await FoodRecognition.estimate(image: image, config: ai.config)
+            // @State 的 setter 是 nonmutating，直接在回调里赋值即可。
+            let result = try await FoodRecognition.estimate(image: image, config: ai.config, onRetry: { retryAttempt = $0 })
             items = result
             recognizedByAI = true
             store.state.quotas.bump("food")

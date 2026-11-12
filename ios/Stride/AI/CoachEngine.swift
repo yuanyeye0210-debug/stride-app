@@ -48,7 +48,7 @@ enum CoachEngine {
         return lines.joined(separator: "\n")
     }
 
-    static func ask(_ text: String, store: AppStore, config: AIConfig) async -> (answer: String, usedAI: Bool) {
+    static func ask(_ text: String, store: AppStore, config: AIConfig, onRetry: (@MainActor (Int) -> Void)? = nil) async -> (answer: String, usedAI: Bool) {
         if config.isConfigured {
             do {
                 let full = "以下是用户当前状态：\n\(context(store: store))\n\n用户说：\(text)"
@@ -56,7 +56,8 @@ enum CoachEngine {
                     system: systemPrompt,
                     user: full,
                     config: config,
-                    maxTokens: 600
+                    maxTokens: 600,
+                    onRetry: onRetry
                 )
                 return (answer, true)
             } catch {

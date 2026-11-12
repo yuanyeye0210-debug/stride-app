@@ -25,4 +25,22 @@ final class VisionRequestTests: XCTestCase {
         XCTAssertEqual(imageURL?["url"] as? String, "data:image/jpeg;base64,AAAA")
         XCTAssertEqual(json?["model"] as? String, "gpt-4o-mini")
     }
+
+    func testVisionRejectsOversizeImage() {
+        let config = AIConfig(
+            baseURL: "https://api.openai.com/v1",
+            apiKey: "sk-test",
+            chatModel: "gpt-4o-mini",
+            visionModel: "gpt-4o-mini",
+            temperature: 0.2
+        )
+        let huge = String(repeating: "A", count: VisionImageLimits.maxBase64Length + 1)
+        XCTAssertThrowsError(try AIClient.visionRequestJSON(
+            imageBase64JPEG: huge,
+            prompt: "识别这餐",
+            config: config
+        )) { error in
+            XCTAssertEqual(error as? AIError, .imageTooLarge)
+        }
+    }
 }

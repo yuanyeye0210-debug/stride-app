@@ -25,7 +25,7 @@ struct ProfileEditView: View {
             VStack {
                 Spacer()
                 Button {
-                    store.state.profile = draft
+                    store.state.profile = Backup.clampProfile(draft)
                     store.saveNow()
                     dismiss()
                 } label: {

@@ -85,6 +85,22 @@ enum FoodDatabase {
 
 // MARK: - 拍照识别
 
+/// 视觉请求的图片上限（集中在一处，测试可 pin 住）：
+/// 每请求只发 1 张图；先缩到最长边 900px、JPEG 0.62；
+/// 仍超 2MB 就继续降质量，实在超了就直接拒绝，不发原图。
+enum VisionImageLimits {
+    static let maxEdge: CGFloat = 900
+    static let jpegQuality: CGFloat = 0.62
+    static let maxBytes = 2_000_000
+    static let maxImagesPerRequest = 1
+    /// base64 长度上限：2,000,000 字节的精确 base64 长度是 ceil(2,000,000/3)*4。
+    static let maxBase64Length = (maxBytes + 2) / 3 * 4
+
+    static func validateBase64Length(_ base64: String) throws {
+        guard base64.count <= maxBase64Length else { throw AIError.imageTooLarge }
+    }
+}
+
 enum FoodRecognition {
 
     static let prompt = """
@@ -105,20 +121,32 @@ enum FoodRecognition {
         let items: [Item]
     }
 
-    static func estimate(image: UIImage, config: AIConfig) async throws -> [FoodItem] {
+    /// 压缩成可发送的 base64：一档 900px / JPEG 0.62，超 2MB 再降质量到 0.45、0.3，仍超就拒绝。
+    /// 编不出来图时报编码失败，只有编出来但一直超限时才报图太大。
+    static func prepare(image: UIImage) throws -> String {
+        let small = downscale(image, maxEdge: VisionImageLimits.maxEdge)
+        var encoded = false
+        for quality in [VisionImageLimits.jpegQuality, CGFloat(0.45), CGFloat(0.3)] {
+            guard let data = small.jpegData(compressionQuality: quality) else { continue }
+            encoded = true
+            if data.count <= VisionImageLimits.maxBytes {
+                return data.base64EncodedString()
+            }
+        }
+        throw encoded ? AIError.imageTooLarge : AIError.badResponse("图片编码失败")
+    }
+
+    static func estimate(image: UIImage, config: AIConfig, onRetry: (@MainActor (Int) -> Void)? = nil) async throws -> [FoodItem] {
         guard config.isConfigured else { throw AIError.notConfigured }
 
-        let small = downscale(image, maxEdge: 900)
-        guard let data = small.jpegData(compressionQuality: 0.62) else {
-            throw AIError.badResponse("图片编码失败")
-        }
-        let b64 = data.base64EncodedString()
+        let b64 = try prepare(image: image)
 
         let raw = try await AIClient.vision(
             imageBase64JPEG: b64,
             prompt: prompt,
             config: config,
-            maxTokens: 900
+            maxTokens: 900,
+            onRetry: onRetry
         )
 
         guard let jsonData = JSONExtract.firstObject(from: raw) else {

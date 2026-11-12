@@ -6,6 +6,7 @@ struct CoachView: View {
 
     @State private var input = ""
     @State private var sending = false
+    @State private var retryAttempt: Int?
     @State private var showSettings = false
     @State private var toast: String?
 
@@ -173,13 +174,21 @@ struct CoachView: View {
 
     private var typing: some View {
         HStack {
-            HStack(spacing: 4) {
-                ForEach(0..<3) { i in
-                    Circle()
-                        .fill(Palette.textDim)
-                        .frame(width: 6, height: 6)
-                        .opacity(0.4)
-                        .animation(.easeInOut(duration: 0.6).repeatForever().delay(Double(i) * 0.15), value: sending)
+            HStack(spacing: 8) {
+                HStack(spacing: 4) {
+                    ForEach(0..<3) { i in
+                        Circle()
+                            .fill(Palette.textDim)
+                            .frame(width: 6, height: 6)
+                            .opacity(0.4)
+                            .animation(.easeInOut(duration: 0.6).repeatForever().delay(Double(i) * 0.15), value: sending)
+                    }
+                }
+                // 重试时显示第几次重试，而不是一直只显示“正在输入”。
+                if let attempt = retryAttempt {
+                    Text(AIRetryPolicy.retryStatusText(nextAttempt: attempt) ?? "重试中…")
+                        .font(.system(size: 13))
+                        .foregroundStyle(Palette.textDim)
                 }
             }
             .padding(.horizontal, 16)
@@ -232,9 +241,10 @@ struct CoachView: View {
         input = ""
         store.appendChat(ChatTurn(role: .user, text: text))
         sending = true
-        defer { sending = false }
+        defer { sending = false; retryAttempt = nil }
 
-        let result = await CoachEngine.ask(text, store: store, config: ai.config)
+        // @State 的 setter 是 nonmutating，直接在回调里赋值即可。
+        let result = await CoachEngine.ask(text, store: store, config: ai.config, onRetry: { retryAttempt = $0 })
         store.appendChat(ChatTurn(role: .coach, text: result.answer))
     }
 }
