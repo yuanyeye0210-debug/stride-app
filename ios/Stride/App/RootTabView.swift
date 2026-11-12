@@ -4,17 +4,11 @@ struct RootTabView: View {
     @State private var selection = 0
 
     var body: some View {
-        Group {
-            switch selection {
-            case 0:
-                NavigationStack { TodayView() }
-            case 1:
-                NavigationStack { TrainingHomeView() }
-            case 2:
-                NavigationStack { ProgressViewScreen() }
-            default:
-                NavigationStack { MeView() }
-            }
+        ZStack {
+            tab(0) { NavigationStack { TodayView() } }
+            tab(1) { NavigationStack { TrainingHomeView() } }
+            tab(2) { NavigationStack { ProgressViewScreen() } }
+            tab(3) { NavigationStack { MeView() } }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Palette.bg)
@@ -23,12 +17,19 @@ struct RootTabView: View {
         }
     }
 
+    private func tab<Content: View>(_ tag: Int, @ViewBuilder content: () -> Content) -> some View {
+        content()
+            .opacity(selection == tag ? 1 : 0)
+            .allowsHitTesting(selection == tag)
+            .accessibilityHidden(selection != tag)
+    }
+
     private var tabBar: some View {
         HStack(spacing: 4) {
-            tab("主页", "sun.horizon.fill", 0)
-            tab("计划", "calendar", 1)
-            tab("记录", "chart.line.uptrend.xyaxis", 2)
-            tab("自己", "person.crop.circle", 3)
+            item("主页", "sun.horizon.fill", 0)
+            item("计划", "calendar", 1)
+            item("记录", "chart.line.uptrend.xyaxis", 2)
+            item("自己", "person.crop.circle", 3)
         }
         .padding(6)
         .background(
@@ -41,7 +42,7 @@ struct RootTabView: View {
         .padding(.bottom, 4)
     }
 
-    private func tab(_ title: String, _ icon: String, _ tag: Int) -> some View {
+    private func item(_ title: String, _ icon: String, _ tag: Int) -> some View {
         let on = selection == tag
         return Button {
             selection = tag
