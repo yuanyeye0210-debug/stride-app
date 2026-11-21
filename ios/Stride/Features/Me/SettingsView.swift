@@ -69,7 +69,7 @@ struct SettingsView: View {
             .alert("iCloud 同步说明", isPresented: $showICloudInfo) {
                 Button("知道了", role: .cancel) {}
             } message: {
-                Text("当前版本采用免签名本机部署（SideStore 免费证书无法开启 iCloud 容器权限）。所有训练、饮食、体重与照片数据均完整保存在本机，可使用「导出训练数据」定期备份 JSON。")
+                Text("当前版本采用未签名 IPA 通过 Sideloadly 本机自签安装（免费 Apple ID 证书无法开启 iCloud 容器权限）。所有训练、饮食、体重与照片数据均完整保存在本机，可使用「导出训练数据」定期备份 JSON。")
             }
             .sheet(isPresented: $showStorageSheet) {
                 StorageDataSheet()

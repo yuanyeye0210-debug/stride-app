@@ -1,12 +1,13 @@
 name: build-stride-ipa
 
+# Sideloadly 未签名 IPA 自动构建与发布工作流
 # 版本规则：每次构建 = 一个新版本（1.1.<run_number>）
-#   旧仓库最后发过 stride-v1.0.10，所以这里从 1.1 起，保证手机能看到更新。
-#   1. 先跑单元测试，失败就不编译、不发版
-#   2. 编译 → Stride-1.1.N.ipa
-#   3. 发布到 Releases（tag: stride-v1.1.N）
-#   4. 按版本号数字排序，只保留最新 2 个（当前 + 上一版），更早的连同 tag 一起删
-#   5. 用剩下的两个 release 更新仓库根目录的 apps.json（SideStore / AltStore 源）
+#   旧仓库最后发过 stride-v1.0.10，所以这里从 1.1 起，保证覆盖升级时版本号递增。
+#   1. 先跑单元测试（StrideTests），失败就不编译、不发版
+#   2. 编译未签名应用并打包 → Stride-1.1.N.ipa（供 Sideloadly 电脑端签名安装）
+#   3. 校验 Bundle ID（com.yg.stride）并计算文件大小与 SHA-256
+#   4. 发布到 GitHub Releases（tag: stride-v1.1.N），附带 Sideloadly 安装说明
+#   5. 按版本号数字排序，只保留最新 2 个 Release（当前版 + 上一版），更早的连同 tag 一起删除
 #
 # 触发条件：只有 ios 或这条工作流变了才跑。改文档、改 Web 不会产生新版本。
 # pull request 只测试和编译，不发布。
@@ -94,18 +95,43 @@ jobs:
             ENABLE_BITCODE=NO \
             build
 
-      - name: Package IPA
+      - name: Package IPA for Sideloadly
+        id: pkg
         run: |
+          set -euo pipefail
           APP="build/Build/Products/Release-iphoneos/Stride.app"
           test -d "$APP" || { echo "找不到 $APP"; ls -R build/Build/Products | head -60; exit 1; }
+
           rm -rf Payload Stride-unsigned.ipa
           mkdir -p Payload
           cp -R "$APP" Payload/
-          zip -qr Stride-unsigned.ipa Payload
+          rm -rf Payload/Stride.app/_CodeSignature
+          zip -qry Stride-unsigned.ipa Payload
+
           mkdir -p "$GITHUB_WORKSPACE/dist"
-          cp Stride-unsigned.ipa "$GITHUB_WORKSPACE/dist/Stride-${{ steps.v.outputs.marketing }}.ipa"
-          /usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" \
-            "Payload/Stride.app/Info.plist" || true
+          OUT="$GITHUB_WORKSPACE/dist/Stride-${{ steps.v.outputs.marketing }}.ipa"
+          cp Stride-unsigned.ipa "$OUT"
+
+          BUNDLE_ID=$(/usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "Payload/Stride.app/Info.plist")
+          SHORT_VER=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "Payload/Stride.app/Info.plist")
+          BUILD_VER=$(/usr/libexec/PlistBuddy -c "Print :CFBundleVersion" "Payload/Stride.app/Info.plist")
+          MIN_OS=$(/usr/libexec/PlistBuddy -c "Print :MinimumOSVersion" "Payload/Stride.app/Info.plist" || echo "17.0")
+          test "$BUNDLE_ID" = "com.yg.stride" || { echo "Bundle ID 异常：$BUNDLE_ID"; exit 1; }
+
+          SHA256=$(shasum -a 256 "$OUT" | awk '{print $1}')
+          SIZE_BYTES=$(stat -f%z "$OUT")
+          SIZE_MB=$(awk -v b="$SIZE_BYTES" 'BEGIN { printf "%.2f MB", b / 1048576 }')
+
+          echo "bundle_id=$BUNDLE_ID" >> "$GITHUB_OUTPUT"
+          echo "min_os=$MIN_OS" >> "$GITHUB_OUTPUT"
+          echo "sha256=$SHA256" >> "$GITHUB_OUTPUT"
+          echo "size_bytes=$SIZE_BYTES" >> "$GITHUB_OUTPUT"
+          echo "size_human=$SIZE_MB" >> "$GITHUB_OUTPUT"
+
+          echo "Bundle ID: $BUNDLE_ID"
+          echo "Version: $SHORT_VER ($BUILD_VER), iOS $MIN_OS+"
+          echo "Size: $SIZE_MB ($SIZE_BYTES bytes)"
+          echo "SHA-256: $SHA256"
           ls -lh "$GITHUB_WORKSPACE/dist"
 
       - name: Publish release
@@ -120,17 +146,27 @@ jobs:
           NOTES=$(cat <<EOF
           自动构建 #${{ github.run_number }} · ${{ github.sha }}
 
-          未签名 IPA。在 iPhone 上安装 SideStore，并打开 LocalDevVPN：
-          1. SideStore → 源 → 添加 https://raw.githubusercontent.com/${{ github.repository }}/main/apps.json
-          2. 安装「步迹」。SideStore 会用你的 Apple ID 签名。
-          3. 保持 LocalDevVPN 连接。免费证书到期前在 SideStore 里刷新即可，不用重装，本机记录还在。
+          ### 产物信息（Sideloadly 未签名 IPA）
+          - 文件：\`Stride-$VER.ipa\`
+          - Bundle ID：\`${{ steps.pkg.outputs.bundle_id }}\`
+          - 最低系统：iOS ${{ steps.pkg.outputs.min_os }}+
+          - 大小：${{ steps.pkg.outputs.size_human }}（${{ steps.pkg.outputs.size_bytes }} bytes）
+          - SHA-256：\`${{ steps.pkg.outputs.sha256 }}\`
 
-          源和 Releases 都只保留当前版和上一版。
+          ### 使用 Sideloadly 安装到 iPhone
+          1. 下载下方附件 \`Stride-$VER.ipa\` 到电脑（Windows / macOS）。
+          2. 用数据线连接 iPhone，在电脑打开 [Sideloadly](https://sideloadly.io/)（iOS 16+ 需在手机「设置 → 隐私与安全性 → 开发者模式」中开启开发者模式）。
+          3. 将 \`Stride-$VER.ipa\` 拖入 Sideloadly，填入你的 Apple ID（不要修改 Bundle ID，保持 \`com.yg.stride\`），点击 **Start** 签名安装。
+          4. 首次安装后，在 iPhone「设置 → 通用 → VPN 与设备管理」信任你的 Apple ID 即可打开「步迹」。
+          5. 后续升级或 7 天证书续签：用同一 Apple ID 覆盖安装新版 IPA（或在 Sideloadly 中开启 Wi-Fi 自动续签），本机训练与饮食记录均完整保留。
+
+          Releases 仅保留当前版与上一版（共 ${KEEP_RELEASES:-2} 个版本），方便按需回退。
           EOF
           )
           if gh release view "$TAG" >/dev/null 2>&1; then
-            echo "release 已存在（同一 run 重跑），覆盖产物"
+            echo "release 已存在（同一 run 重跑），覆盖产物并更新说明"
             gh release upload "$TAG" "$IPA" --clobber
+            gh release edit "$TAG" --title "Stride $VER" --notes "$NOTES"
           else
             gh release create "$TAG" "$IPA" \
               --title "Stride $VER" \
@@ -167,25 +203,6 @@ jobs:
                     | { tag: .tagName,
                         v: (.tagName | sub("stride-v"; "") | split(".") | map(tonumber)) }]
                   | sort_by(.v) | reverse | .[].tag'
-
-      - name: Update SideStore source
-        if: github.event_name != 'pull_request'
-        working-directory: .
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          LOCAL_IPA: ${{ github.workspace }}/dist/Stride-${{ steps.v.outputs.marketing }}.ipa
-          LOCAL_VERSION: ${{ steps.v.outputs.marketing }}
-        run: |
-          python3 .github/scripts/sidestore_source.py
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add apps.json
-          if git diff --cached --quiet; then
-            echo "SideStore 源没有变化"
-          else
-            git commit -m "更新 SideStore 源"
-            git push
-          fi
 
       - name: Upload workflow artifact
         uses: actions/upload-artifact@v4
