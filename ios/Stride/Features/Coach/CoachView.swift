@@ -9,6 +9,7 @@ struct CoachView: View {
     @State private var retryAttempt: Int?
     @State private var activeTask: Task<Void, Never>?
     @State private var replyToken = 0
+    @State private var appliedPlanTurnIDs: Set<UUID> = []
     @State private var toast: String?
 
     private var messages: [ChatTurn] { store.state.chats }
@@ -140,6 +141,7 @@ struct CoachView: View {
 
     private var suggested: [String] {
         [
+            "帮我生成下周训练课表",
             "今天练什么？",
             "卧推 62.5 做了 8 次，下次加多少？",
             "这周睡得很差，要不要减载？",
@@ -153,38 +155,92 @@ struct CoachView: View {
         HStack {
             if turn.role == .user { Spacer(minLength: 44) }
 
-            Text(turn.text)
-                .font(.system(size: 14.5))
-                .foregroundStyle(turn.role == .user ? Color.black : Palette.text)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 11)
-                .background(
-                    RoundedRectangle(cornerRadius: 18, style: .continuous)
-                        .fill(turn.role == .user ? Color.white : Palette.card)
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 18, style: .continuous)
-                        .strokeBorder(turn.role == .user ? .clear : Palette.stroke, lineWidth: 1)
-                )
-                .textSelection(.enabled)
-                .contextMenu {
-                    Button {
-                        UIPasteboard.general.string = turn.text
-                        toast = "已复制"
-                    } label: {
-                        Label("复制内容", systemImage: "doc.on.doc")
-                    }
-                    if turn.role == .user {
+            VStack(alignment: .leading, spacing: 8) {
+                Text(turn.text)
+                    .font(.system(size: 14.5))
+                    .foregroundStyle(turn.role == .user ? Color.black : Palette.text)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 11)
+                    .background(
+                        RoundedRectangle(cornerRadius: 18, style: .continuous)
+                            .fill(turn.role == .user ? Color.white : Palette.card)
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 18, style: .continuous)
+                            .strokeBorder(turn.role == .user ? .clear : Palette.stroke, lineWidth: 1)
+                    )
+                    .textSelection(.enabled)
+                    .contextMenu {
                         Button {
-                            triggerSend(text: turn.text)
+                            UIPasteboard.general.string = turn.text
+                            toast = "已复制"
                         } label: {
-                            Label("再问一次", systemImage: "arrow.clockwise")
+                            Label("复制内容", systemImage: "doc.on.doc")
+                        }
+                        if turn.role == .user {
+                            Button {
+                                triggerSend(text: turn.text)
+                            } label: {
+                                Label("再问一次", systemImage: "arrow.clockwise")
+                            }
                         }
                     }
+
+                if let plan = turn.attachedPlan {
+                    planCard(plan, turnID: turn.id)
                 }
+            }
 
             if turn.role == .coach { Spacer(minLength: 44) }
         }
+    }
+
+    private func planCard(_ plan: TrainingPlan, turnID: UUID) -> some View {
+        let applied = appliedPlanTurnIDs.contains(turnID)
+        let activeDays = plan.days.filter { !$0.rest }
+        return VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Image(systemName: "calendar.badge.checkmark")
+                    .foregroundStyle(Palette.green)
+                Text("生成课表 · \(plan.goal.rawValue)（每周 \(activeDays.count) 练）")
+                    .font(.system(size: 13.5, weight: .bold))
+                    .foregroundStyle(Palette.text)
+                Spacer()
+            }
+
+            VStack(alignment: .leading, spacing: 4) {
+                ForEach(activeDays.prefix(5)) { day in
+                    Text("· \(day.title)（\(day.exercises.prefix(3).map(\.name).joined(separator: " / "))）")
+                        .font(.system(size: 11.5))
+                        .foregroundStyle(Palette.textDim)
+                        .lineLimit(1)
+                }
+            }
+
+            Button {
+                store.setPlan(plan)
+                appliedPlanTurnIDs.insert(turnID)
+                replyToken += 1
+                toast = "已一键写入「本周计划」"
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: applied ? "checkmark.circle.fill" : "square.and.arrow.down")
+                    Text(applied ? "已写入本周计划" : "一键应用到本周计划")
+                }
+                .font(.system(size: 13, weight: .bold))
+                .foregroundStyle(applied ? Palette.green : Color.black)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 10)
+                .background(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(applied ? Palette.green.opacity(0.16) : Palette.green)
+                )
+            }
+            .buttonStyle(.stridePress)
+            .disabled(applied)
+        }
+        .padding(13)
+        .card(radius: 18, fill: Palette.cardSoft, stroke: Palette.green.opacity(0.35))
     }
 
     private var typing: some View {
@@ -270,7 +326,7 @@ struct CoachView: View {
         activeTask = Task {
             let result = await CoachEngine.ask(text, store: store, config: ai.config, onRetry: { retryAttempt = $0 })
             await MainActor.run {
-                store.appendChat(ChatTurn(role: .coach, text: result.answer))
+                store.appendChat(ChatTurn(role: .coach, text: result.answer, attachedPlan: result.attachedPlan))
                 sending = false
                 retryAttempt = nil
                 replyToken += 1

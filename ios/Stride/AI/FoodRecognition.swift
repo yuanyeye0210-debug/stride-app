@@ -109,6 +109,12 @@ enum FoodRecognition {
     要求：名称用中文；克数按常见份量估算；数值是这份食物的总量而不是每 100g。
     """
 
+    static let nutritionLabelPrompt = """
+    读取这张包装食品的营养成分表（或配料表）。只输出 JSON，不要任何解释文字，格式：
+    {"items":[{"name":"产品或食品名称","grams":100,"kcal":热量千卡,"protein":蛋白质克,"carbs":碳水化合物克,"fat":脂肪克}]}
+    要求：若表中同时有千焦(kJ)请除以4.184换算为千卡(kcal)；优先按每100g/100ml基准输出（grams填100，或填包装标注的单份净含量克数）。
+    """
+
     private struct Payload: Decodable {
         struct Item: Decodable {
             let name: String
@@ -137,6 +143,19 @@ enum FoodRecognition {
     }
 
     static func estimate(image: UIImage, config: AIConfig, onRetry: (@MainActor (Int) -> Void)? = nil) async throws -> [FoodItem] {
+        try await recognize(image: image, prompt: prompt, config: config, onRetry: onRetry)
+    }
+
+    static func estimateNutritionLabel(image: UIImage, config: AIConfig, onRetry: (@MainActor (Int) -> Void)? = nil) async throws -> [FoodItem] {
+        try await recognize(image: image, prompt: nutritionLabelPrompt, config: config, onRetry: onRetry)
+    }
+
+    private static func recognize(
+        image: UIImage,
+        prompt: String,
+        config: AIConfig,
+        onRetry: (@MainActor (Int) -> Void)?
+    ) async throws -> [FoodItem] {
         guard config.isConfigured else { throw AIError.notConfigured }
 
         let b64 = try prepare(image: image)
@@ -181,5 +200,88 @@ enum FoodRecognition {
         return renderer.image { _ in
             image.draw(in: CGRect(origin: .zero, size: target))
         }
+    }
+}
+
+// MARK: - 条形码包装食品检索（Open Food Facts + 本机常见包装兜底）
+
+enum BarcodeFoodLookup {
+    private struct OFFResponse: Decodable {
+        struct Product: Decodable {
+            struct Nutriments: Decodable {
+                let energyKcal100g: Double?
+                let proteins100g: Double?
+                let carbohydrates100g: Double?
+                let fat100g: Double?
+
+                enum CodingKeys: String, CodingKey {
+                    case energyKcal100g = "energy-kcal_100g"
+                    case proteins100g = "proteins_100g"
+                    case carbohydrates100g = "carbohydrates_100g"
+                    case fat100g = "fat_100g"
+                }
+            }
+
+            let productName: String?
+            let productNameZH: String?
+            let nutriments: Nutriments?
+
+            enum CodingKeys: String, CodingKey {
+                case productName = "product_name"
+                case productNameZH = "product_name_zh"
+                case nutriments
+            }
+        }
+
+        let status: Int?
+        let product: Product?
+    }
+
+    static let localBuiltInBarcodes: [String: FoodItem] = [
+        "6901028075015": FoodItem(name: "无糖黑咖啡（瓶装）", grams: 300, kcal: 6, protein: 0.3, carbs: 0.6, fat: 0),
+        "6921168593910": FoodItem(name: "零度无糖可乐", grams: 330, kcal: 0, protein: 0, carbs: 0, fat: 0),
+        "6907992512051": FoodItem(name: "纯牛奶（250ml 盒装）", grams: 250, kcal: 158, protein: 8.5, carbs: 12.0, fat: 8.8),
+        "6948939611524": FoodItem(name: "即食低脂鸡胸肉", grams: 100, kcal: 118, protein: 24.5, carbs: 1.8, fat: 1.5),
+        "6923644278113": FoodItem(name: "高蛋白酸奶杯", grams: 180, kcal: 156, protein: 12.6, carbs: 14.4, fat: 5.4)
+    ]
+
+    static func lookup(barcode: String) async throws -> FoodItem {
+        let code = barcode.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !code.isEmpty else { throw AIError.badResponse("条形码为空") }
+
+        if let builtIn = localBuiltInBarcodes[code] {
+            return builtIn
+        }
+
+        guard let url = URL(string: "https://world.openfoodfacts.org/api/v2/product/\(code).json") else {
+            throw AIError.badResponse("无效条形码格式")
+        }
+
+        var req = URLRequest(url: url)
+        req.timeoutInterval = 10
+        req.setValue("StrideFitnessApp/1.1 (iOS)", forHTTPHeaderField: "User-Agent")
+
+        let (data, response) = try await URLSession.shared.data(for: req)
+        if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
+            throw AIError.badResponse("未检索到该条形码商品（HTTP \(http.statusCode)）")
+        }
+
+        let decoded = try JSONDecoder().decode(OFFResponse.self, from: data)
+        guard decoded.status == 1, let product = decoded.product else {
+            throw AIError.badResponse("数据库中暂无条码 \(code)，请切换「扫营养表」直接拍照识别")
+        }
+
+        let name = (product.productNameZH?.isEmpty == false ? product.productNameZH : nil)
+            ?? (product.productName?.isEmpty == false ? product.productName : nil)
+            ?? "包装食品 \(code)"
+        let n = product.nutriments
+        return FoodItem(
+            name: name,
+            grams: 100,
+            kcal: (n?.energyKcal100g ?? 0).rounded(),
+            protein: ((n?.proteins100g ?? 0) * 10).rounded() / 10,
+            carbs: ((n?.carbohydrates100g ?? 0) * 10).rounded() / 10,
+            fat: ((n?.fat100g ?? 0) * 10).rounded() / 10
+        )
     }
 }

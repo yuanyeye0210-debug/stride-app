@@ -1,4 +1,74 @@
 import SwiftUI
+import AVFoundation
+
+/// 基于 AVAudioEngine 合成的实时 BPM 电子节拍器音频引擎（强弱拍鼓点，零外部音频文件依赖）。
+final class MetronomeAudioEngine: ObservableObject {
+    static let shared = MetronomeAudioEngine()
+
+    private let engine = AVAudioEngine()
+    private let player = AVAudioPlayerNode()
+    private var timer: Timer?
+    private var beatIndex = 0
+    private var accentBuffer: AVAudioPCMBuffer?
+    private var tickBuffer: AVAudioPCMBuffer?
+
+    private init() {
+        setupAudio()
+    }
+
+    private func setupAudio() {
+        let format = AVAudioFormat(standardFormatWithSampleRate: 44100, channels: 1)!
+        engine.attach(player)
+        engine.connect(player, to: engine.mainMixerNode, format: format)
+        accentBuffer = makeClickBuffer(freq: 980, duration: 0.045, gain: 0.35, format: format)
+        tickBuffer = makeClickBuffer(freq: 660, duration: 0.035, gain: 0.22, format: format)
+    }
+
+    private func makeClickBuffer(freq: Double, duration: Double, gain: Float, format: AVAudioFormat) -> AVAudioPCMBuffer? {
+        let count = AVAudioFrameCount(format.sampleRate * duration)
+        guard let buf = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: count) else { return nil }
+        buf.frameLength = count
+        guard let data = buf.floatChannelData?[0] else { return nil }
+        let sr = format.sampleRate
+        for i in 0..<Int(count) {
+            let t = Double(i) / sr
+            let env = Float(exp(-t * 55.0))
+            data[i] = sin(Float(2.0 * .pi * freq * t)) * env * gain
+        }
+        return buf
+    }
+
+    func start(bpm: Int) {
+        stop()
+        try? AVAudioSession.sharedInstance().setCategory(.playback, options: [.mixWithOthers])
+        try? AVAudioSession.sharedInstance().setActive(true)
+        if !engine.isRunning {
+            try? engine.start()
+        }
+        if !player.isPlaying {
+            player.play()
+        }
+        beatIndex = 0
+        let interval = 60.0 / Double(max(60, min(220, bpm)))
+        playTick()
+        timer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] _ in
+            self?.playTick()
+        }
+    }
+
+    func stop() {
+        timer?.invalidate()
+        timer = nil
+    }
+
+    private func playTick() {
+        let buf = (beatIndex % 4 == 0) ? accentBuffer : tickBuffer
+        beatIndex += 1
+        if let buf {
+            player.scheduleBuffer(buf, at: nil, options: [], completionHandler: nil)
+        }
+    }
+}
 
 struct MusicDiscoverView: View {
     @EnvironmentObject private var store: AppStore
@@ -161,6 +231,22 @@ struct MusicDiscoverView: View {
         }
         .sheet(isPresented: $showFavoritesSheet) {
             MusicFavoritesSheet(playlists: hotCharts + recommended + workoutPlaylists, tracks: topTracks)
+        }
+        .onChange(of: isPlaying) { _, playing in
+            if playing, let track = activeTrack {
+                MetronomeAudioEngine.shared.start(bpm: track.bpm)
+            } else {
+                MetronomeAudioEngine.shared.stop()
+            }
+        }
+        .onChange(of: activeTrack?.id) { _, _ in
+            if isPlaying, let track = activeTrack {
+                MetronomeAudioEngine.shared.start(bpm: track.bpm)
+            }
+        }
+        .onDisappear {
+            isPlaying = false
+            MetronomeAudioEngine.shared.stop()
         }
     }
 

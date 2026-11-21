@@ -162,26 +162,57 @@ struct SessionView: View {
 
     private func exerciseCard(index: Int) -> some View {
         let ex = draft.exercises[index]
+        let isSuperset = ex.supersetGroupID != nil
         return VStack(alignment: .leading, spacing: 10) {
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(ex.name)
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundStyle(Palette.text)
+                    HStack(spacing: 6) {
+                        if isSuperset {
+                            Text("超级组")
+                                .font(.system(size: 10, weight: .bold))
+                                .foregroundStyle(Color.black)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(Capsule().fill(Palette.purple))
+                        }
+                        Text(ex.name)
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundStyle(Palette.text)
+                    }
                     Text("\(ex.group.rawValue) · 休息 \(ex.restSec)″")
                         .font(.system(size: 11))
                         .foregroundStyle(Palette.textFaint)
                 }
                 Spacer()
-                Button {
-                    draft.exercises.remove(at: index)
+                Menu {
+                    if index + 1 < draft.exercises.count {
+                        Button {
+                            toggleSupersetWithNext(index: index)
+                        } label: {
+                            Label(
+                                isSuperset ? "解除超级组配对" : "与下一动作设为超级组",
+                                systemImage: "link"
+                            )
+                        }
+                    }
+                    Menu("组间休息时长") {
+                        ForEach([60, 90, 120, 180], id: \.self) { sec in
+                            Button("\(sec) 秒") {
+                                draft.exercises[index].restSec = sec
+                            }
+                        }
+                    }
+                    Button(role: .destructive) {
+                        draft.exercises.remove(at: index)
+                    } label: {
+                        Label("删除动作", systemImage: "trash")
+                    }
                 } label: {
-                    Image(systemName: "trash")
-                        .font(.system(size: 13))
-                        .foregroundStyle(Palette.textFaint)
-                        .padding(8)
+                    Image(systemName: "ellipsis.circle")
+                        .font(.system(size: 16))
+                        .foregroundStyle(Palette.textDim)
+                        .padding(6)
                 }
-                .buttonStyle(.plain)
             }
 
             HStack(spacing: 8) {
@@ -216,19 +247,60 @@ struct SessionView: View {
                 }
                 .foregroundStyle(Palette.textDim)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.stridePress)
         }
         .padding(16)
-        .card(radius: 22, fill: Palette.card, stroke: Palette.stroke)
+        .card(
+            radius: 22,
+            fill: Palette.card,
+            stroke: isSuperset ? Palette.purple.opacity(0.6) : Palette.stroke
+        )
+    }
+
+    private func toggleSupersetWithNext(index: Int) {
+        guard index + 1 < draft.exercises.count else { return }
+        if draft.exercises[index].supersetGroupID != nil {
+            let gid = draft.exercises[index].supersetGroupID
+            for k in draft.exercises.indices where draft.exercises[k].supersetGroupID == gid {
+                draft.exercises[k].supersetGroupID = nil
+            }
+            toast = "已解除超级组"
+        } else {
+            let gid = UUID().uuidString
+            draft.exercises[index].supersetGroupID = gid
+            draft.exercises[index + 1].supersetGroupID = gid
+            toast = "已设为超级组：连续完成两动作后再休息"
+        }
     }
 
     private func setRow(exerciseIndex i: Int, setIndex j: Int) -> some View {
         let set = draft.exercises[i].sets[j]
+        let badgeColor: Color = {
+            switch set.setType {
+            case .normal: return Palette.textFaint
+            case .warmup: return Palette.amber
+            case .drop: return Palette.coralHi
+            case .failure: return Palette.purple
+            }
+        }()
         return HStack(spacing: 8) {
-            Text("\(j + 1)")
-                .font(.system(size: 13, weight: .semibold, design: .rounded))
-                .foregroundStyle(Palette.textFaint)
-                .frame(width: 26, alignment: .leading)
+            Button {
+                withAnimation(.snappy(duration: 0.2)) {
+                    draft.exercises[i].sets[j].setType = set.setType.next
+                }
+                toast = "第 \(j + 1) 组设为：\(draft.exercises[i].sets[j].setType.labelZH)"
+            } label: {
+                Text(set.setType == .normal ? "\(j + 1)" : set.setType.shortBadge)
+                    .font(.system(size: 12, weight: .bold, design: .rounded))
+                    .foregroundStyle(set.setType == .normal ? badgeColor : Color.black)
+                    .frame(width: 24, height: 24)
+                    .background(
+                        RoundedRectangle(cornerRadius: 7, style: .continuous)
+                            .fill(set.setType == .normal ? Palette.cardHigh : badgeColor)
+                    )
+            }
+            .buttonStyle(.stridePress)
+            .frame(width: 26, alignment: .leading)
 
             TextField("0", value: $draft.exercises[i].sets[j].weight, format: .number)
                 .keyboardType(.decimalPad)

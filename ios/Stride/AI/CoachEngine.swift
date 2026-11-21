@@ -60,7 +60,24 @@ enum CoachEngine {
         return .coachChat
     }
 
-    static func ask(_ text: String, store: AppStore, config: AIConfig, onRetry: (@MainActor (Int) -> Void)? = nil) async -> (answer: String, usedAI: Bool) {
+    /// 判断提问是否要求生成可直接写入本周的训练课表。
+    nonisolated static func wantsGeneratedPlan(for text: String) -> Bool {
+        let lower = text.lowercased()
+        let actionWords = ["生成", "排", "制定", "安排", "出一份", "给我一份"]
+        let planWords = ["计划", "课表", "训练周", "周练"]
+        return actionWords.contains(where: { lower.contains($0) }) && planWords.contains(where: { lower.contains($0) })
+    }
+
+    static func ask(_ text: String, store: AppStore, config: AIConfig, onRetry: (@MainActor (Int) -> Void)? = nil) async -> (answer: String, usedAI: Bool, attachedPlan: TrainingPlan?) {
+        let shouldAttachPlan = wantsGeneratedPlan(for: text)
+        let candidatePlan: TrainingPlan? = shouldAttachPlan
+            ? PlanGenerator.generate(
+                goal: store.state.profile.goal,
+                days: store.state.profile.daysPerWeek,
+                experience: store.state.profile.experience
+            )
+            : nil
+
         if config.isConfigured {
             do {
                 let full = "以下是用户当前状态：\n\(context(store: store))\n\n用户说：\(text)"
@@ -72,10 +89,10 @@ enum CoachEngine {
                     maxTokens: 600,
                     onRetry: onRetry
                 )
-                return (answer, true)
+                return (answer, true, candidatePlan)
             } catch is CancellationError {
                 let local = localReply(text, store: store)
-                return (local + "\n\n（已切回本机教练即时回复）", false)
+                return (local + "\n\n（已切回本机教练即时回复）", false, candidatePlan)
             } catch let aiError as AIError {
                 let local = localReply(text, store: store)
                 let note: String
@@ -85,13 +102,13 @@ enum CoachEngine {
                 default:
                     note = "（云端教练暂不可用：\(aiError.localizedDescription)，以上为本机分析）"
                 }
-                return (local + "\n\n\(note)", false)
+                return (local + "\n\n\(note)", false, candidatePlan)
             } catch {
                 let local = localReply(text, store: store)
-                return (local + "\n\n（云端连接失败：\(error.localizedDescription)，以上为本机分析。）", false)
+                return (local + "\n\n（云端连接失败：\(error.localizedDescription)，以上为本机分析。）", false, candidatePlan)
             }
         }
-        return (localReply(text, store: store), false)
+        return (localReply(text, store: store), false, candidatePlan)
     }
 
     // MARK: - 本地规则

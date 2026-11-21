@@ -49,6 +49,43 @@ struct Exercise: Identifiable, Codable, Hashable {
 
 // MARK: - 训练
 
+/// 训练组别类型：常规 / 热身 / 递减 / 力竭（Msats 风格组标）。
+enum SetType: String, Codable, CaseIterable, Identifiable, Hashable {
+    case normal = "normal"
+    case warmup = "warmup"
+    case drop = "drop"
+    case failure = "failure"
+
+    var id: String { rawValue }
+
+    var shortBadge: String {
+        switch self {
+        case .normal: return ""
+        case .warmup: return "W"
+        case .drop: return "D"
+        case .failure: return "F"
+        }
+    }
+
+    var labelZH: String {
+        switch self {
+        case .normal: return "常规组"
+        case .warmup: return "热身组"
+        case .drop: return "递减组"
+        case .failure: return "力竭组"
+        }
+    }
+
+    var next: SetType {
+        switch self {
+        case .normal: return .warmup
+        case .warmup: return .drop
+        case .drop: return .failure
+        case .failure: return .normal
+        }
+    }
+}
+
 struct SetEntry: Identifiable, Codable, Hashable {
     var id = UUID()
     var weight: Double = 0
@@ -56,8 +93,42 @@ struct SetEntry: Identifiable, Codable, Hashable {
     var seconds: Int = 0
     var rpe: Double? = nil
     var done: Bool = false
+    var setType: SetType = .normal
 
     var volume: Double { weight * Double(reps) }
+
+    init(
+        id: UUID = UUID(),
+        weight: Double = 0,
+        reps: Int = 0,
+        seconds: Int = 0,
+        rpe: Double? = nil,
+        done: Bool = false,
+        setType: SetType = .normal
+    ) {
+        self.id = id
+        self.weight = weight
+        self.reps = reps
+        self.seconds = seconds
+        self.rpe = rpe
+        self.done = done
+        self.setType = setType
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case id, weight, reps, seconds, rpe, done, setType
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
+        weight = try c.decodeIfPresent(Double.self, forKey: .weight) ?? 0
+        reps = try c.decodeIfPresent(Int.self, forKey: .reps) ?? 0
+        seconds = try c.decodeIfPresent(Int.self, forKey: .seconds) ?? 0
+        rpe = try c.decodeIfPresent(Double.self, forKey: .rpe)
+        done = try c.decodeIfPresent(Bool.self, forKey: .done) ?? false
+        setType = try c.decodeIfPresent(SetType.self, forKey: .setType) ?? .normal
+    }
 }
 
 struct LoggedExercise: Identifiable, Codable, Hashable {
@@ -69,10 +140,50 @@ struct LoggedExercise: Identifiable, Codable, Hashable {
     var restSec: Int = 90
     var sets: [SetEntry] = []
     var note: String = ""
+    var supersetGroupID: String? = nil
 
     var doneSets: [SetEntry] { sets.filter(\.done) }
     var volume: Double { doneSets.reduce(0) { $0 + $1.volume } }
     var topWeight: Double { doneSets.map(\.weight).max() ?? 0 }
+
+    init(
+        id: UUID = UUID(),
+        exerciseID: UUID,
+        name: String,
+        group: MuscleGroup = .chest,
+        isTimed: Bool = false,
+        restSec: Int = 90,
+        sets: [SetEntry] = [],
+        note: String = "",
+        supersetGroupID: String? = nil
+    ) {
+        self.id = id
+        self.exerciseID = exerciseID
+        self.name = name
+        self.group = group
+        self.isTimed = isTimed
+        self.restSec = restSec
+        self.sets = sets
+        self.note = note
+        self.supersetGroupID = supersetGroupID
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case id, exerciseID, name, group, isTimed, restSec, sets, note, supersetGroupID
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
+        exerciseID = try c.decode(UUID.self, forKey: .exerciseID)
+        name = try c.decode(String.self, forKey: .name)
+        group = try c.decodeIfPresent(MuscleGroup.self, forKey: .group) ?? .chest
+        isTimed = try c.decodeIfPresent(Bool.self, forKey: .isTimed) ?? false
+        restSec = try c.decodeIfPresent(Int.self, forKey: .restSec) ?? 90
+        sets = try c.decodeIfPresent([SetEntry].self, forKey: .sets) ?? []
+        note = try c.decodeIfPresent(String.self, forKey: .note) ?? ""
+        supersetGroupID = try c.decodeIfPresent(String.self, forKey: .supersetGroupID)
+    }
 }
 
 enum SessionKind: String, Codable, CaseIterable, Identifiable {
@@ -511,6 +622,28 @@ struct ChatTurn: Identifiable, Codable, Hashable {
     var role: ChatRole
     var text: String
     var date: Date = Date()
+    var attachedPlan: TrainingPlan? = nil
+
+    init(id: UUID = UUID(), role: ChatRole, text: String, date: Date = Date(), attachedPlan: TrainingPlan? = nil) {
+        self.id = id
+        self.role = role
+        self.text = text
+        self.date = date
+        self.attachedPlan = attachedPlan
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case id, role, text, date, attachedPlan
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
+        role = try c.decode(ChatRole.self, forKey: .role)
+        text = try c.decode(String.self, forKey: .text)
+        date = try c.decodeIfPresent(Date.self, forKey: .date) ?? Date()
+        attachedPlan = try c.decodeIfPresent(TrainingPlan.self, forKey: .attachedPlan)
+    }
 }
 
 // MARK: - 足迹

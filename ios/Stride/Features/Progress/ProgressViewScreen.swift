@@ -668,6 +668,9 @@ struct TrainingAndRoutesDetailView: View {
                 StatTile(value: "\(Int(store.state.sessions.reduce(0) { $0 + $1.totalVolume } / 1000))t", label: "累计容量", tint: Palette.blue)
             }
 
+            MuscleBodyHeatmapCard(sessions: store.state.sessions)
+            ExerciseOneRMTrendCard()
+
             VStack(alignment: .leading, spacing: 12) {
                 Text("每周容量")
                     .font(.system(size: 16, weight: .bold))
@@ -762,6 +765,8 @@ private struct PhotoGallerySheet: View {
     @EnvironmentObject private var store: AppStore
     @Environment(\.dismiss) private var dismiss
 
+    @State private var showCompareSheet = false
+
     var body: some View {
         NavigationStack {
             ZStack {
@@ -795,12 +800,162 @@ private struct PhotoGallerySheet: View {
             .navigationTitle("图片库")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    if store.state.photoMemories.count >= 2 {
+                        Button("身材对比") {
+                            showCompareSheet = true
+                        }
+                        .foregroundStyle(Palette.green)
+                    }
+                }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("关闭") { dismiss() }.foregroundStyle(Palette.textDim)
                 }
             }
+            .sheet(isPresented: $showCompareSheet) {
+                PhotoCompareSheet()
+            }
         }
         .preferredColorScheme(.dark)
+    }
+}
+
+/// 身材打卡照 Before / After 滑动对比器。
+private struct PhotoCompareSheet: View {
+    @EnvironmentObject private var store: AppStore
+    @Environment(\.dismiss) private var dismiss
+
+    @State private var leftIndex = 0
+    @State private var rightIndex = 1
+    @State private var splitRatio: CGFloat = 0.5
+
+    private var photos: [PhotoMemory] {
+        store.state.photoMemories.sorted { $0.date < $1.date }
+    }
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                Palette.bg.ignoresSafeArea()
+                if photos.count < 2 {
+                    EmptyHint(icon: "photo.on.rectangle.angled", title: "至少需要 2 张照片", message: "多拍或导入两张不同时期的打卡照片后再来对比。")
+                } else {
+                    let leftPhoto = photos[min(leftIndex, photos.count - 1)]
+                    let rightPhoto = photos[min(rightIndex, photos.count - 1)]
+                    VStack(spacing: 16) {
+                        compareStage(left: leftPhoto, right: rightPhoto)
+                            .frame(height: 410)
+
+                        HStack(spacing: 12) {
+                            photoPickerColumn(title: "对比前（左）", selection: $leftIndex)
+                            photoPickerColumn(title: "对比后（右）", selection: $rightIndex)
+                        }
+                        Spacer()
+                    }
+                    .padding(Metrics.page)
+                }
+            }
+            .navigationTitle("身材对比")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("关闭") { dismiss() }.foregroundStyle(Palette.textDim)
+                }
+            }
+            .onAppear {
+                if photos.count >= 2 {
+                    leftIndex = 0
+                    rightIndex = photos.count - 1
+                }
+            }
+        }
+        .preferredColorScheme(.dark)
+    }
+
+    private func compareStage(left: PhotoMemory, right: PhotoMemory) -> some View {
+        GeometryReader { geo in
+            let w = geo.size.width
+            let h = geo.size.height
+            let dividerX = w * splitRatio
+
+            ZStack(alignment: .leading) {
+                if let rightImg = store.loadPhotoImage(fileName: right.fileName) {
+                    Image(uiImage: rightImg)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: w, height: h)
+                        .clipped()
+                }
+
+                if let leftImg = store.loadPhotoImage(fileName: left.fileName) {
+                    Image(uiImage: leftImg)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: w, height: h)
+                        .clipped()
+                        .mask(
+                            HStack(spacing: 0) {
+                                Rectangle().frame(width: dividerX)
+                                Spacer(minLength: 0)
+                            }
+                        )
+                }
+
+                // 中央拖拽分割线与手柄
+                Rectangle()
+                    .fill(Color.white)
+                    .frame(width: 2)
+                    .overlay {
+                        Circle()
+                            .fill(Color.white)
+                            .frame(width: 30, height: 30)
+                            .shadow(radius: 4)
+                            .overlay {
+                                Image(systemName: "arrow.left.and.right")
+                                    .font(.system(size: 12, weight: .bold))
+                                    .foregroundStyle(Color.black)
+                            }
+                    }
+                    .position(x: dividerX, y: h / 2)
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 22, style: .continuous)
+                    .strokeBorder(Palette.stroke, lineWidth: 1)
+            )
+            .contentShape(Rectangle())
+            .gesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { val in
+                        splitRatio = min(0.95, max(0.05, val.location.x / max(1, w)))
+                    }
+            )
+        }
+    }
+
+    private func photoPickerColumn(title: String, selection: Binding<Int>) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(title)
+                .font(.system(size: 11.5, weight: .semibold))
+                .foregroundStyle(Palette.textDim)
+            Picker(title, selection: selection) {
+                ForEach(Array(photos.enumerated()), id: \.offset) { idx, item in
+                    Text("\(Self.shortDate(item.date)) · \(item.caption)")
+                        .tag(idx)
+                }
+            }
+            .pickerStyle(.menu)
+            .tint(Palette.green)
+        }
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .card(radius: 14, fill: Palette.card, stroke: Palette.stroke)
+    }
+
+    private static func shortDate(_ date: Date) -> String {
+        let f = DateFormatter()
+        f.dateFormat = "M/d"
+        return f.string(from: date)
     }
 }
 

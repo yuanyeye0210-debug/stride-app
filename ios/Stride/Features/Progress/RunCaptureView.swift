@@ -2,6 +2,23 @@ import SwiftUI
 import MapKit
 import CoreLocation
 import Combine
+import AVFoundation
+
+// MARK: - 中文跑步实时语音播报器
+
+final class RunVoiceCoach {
+    static let shared = RunVoiceCoach()
+    private let synthesizer = AVSpeechSynthesizer()
+    var enabled: Bool = true
+
+    func speak(_ text: String) {
+        guard enabled else { return }
+        let utterance = AVSpeechUtterance(string: text)
+        utterance.voice = AVSpeechSynthesisVoice(language: "zh-CN")
+        utterance.rate = 0.5
+        synthesizer.speak(utterance)
+    }
+}
 
 // MARK: - 记录器
 
@@ -18,6 +35,7 @@ final class RunTracker: NSObject, ObservableObject, CLLocationManagerDelegate {
     private let manager = CLLocationManager()
     private var timer: Timer?
     private var lastLocation: CLLocation?
+    private var lastAnnouncedKm = 0
 
     override init() {
         super.init()
@@ -44,10 +62,12 @@ final class RunTracker: NSObject, ObservableObject, CLLocationManagerDelegate {
         distanceM = 0
         seconds = 0
         lastLocation = nil
+        lastAnnouncedKm = 0
         isDemo = false
         running = true
         status = "记录中"
         manager.startUpdatingLocation()
+        RunVoiceCoach.shared.speak("开始记录跑步，祝你状态出色")
 
         timer?.invalidate()
         timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
@@ -106,7 +126,16 @@ final class RunTracker: NSObject, ObservableObject, CLLocationManagerDelegate {
         guard running, let location = locations.last, location.horizontalAccuracy < 40 else { return }
         if let last = lastLocation {
             let delta = location.distance(from: last)
-            if delta > 0.8 { distanceM += delta }
+            if delta > 0.8 {
+                distanceM += delta
+                let km = Int(distanceM / 1000)
+                if km > lastAnnouncedKm {
+                    lastAnnouncedKm = km
+                    let p = pace
+                    let paceText = p > 0 ? "当前配速 \(p / 60) 分 \(p % 60) 秒" : ""
+                    RunVoiceCoach.shared.speak("已完成 \(km) 公里，用时 \(seconds / 60) 分 \(seconds % 60) 秒，\(paceText)")
+                }
+            }
         }
         lastLocation = location
         points.append(GeoPoint(lat: location.coordinate.latitude, lon: location.coordinate.longitude))
@@ -126,6 +155,7 @@ struct RunCaptureView: View {
     @StateObject private var tracker = RunTracker()
     @State private var camera: MapCameraPosition = .automatic
     @State private var title = "夜跑"
+    @State private var voiceEnabled = true
     @State private var toast: String?
 
     private var coords: [CLLocationCoordinate2D] {
@@ -149,6 +179,16 @@ struct RunCaptureView: View {
                 ToolbarItem(placement: .topBarLeading) {
                     Button("关闭") { tracker.reset(); dismiss() }
                         .foregroundStyle(Palette.textDim)
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        voiceEnabled.toggle()
+                        RunVoiceCoach.shared.enabled = voiceEnabled
+                        toast = voiceEnabled ? "已开启公里语音播报" : "已静音语音播报"
+                    } label: {
+                        Image(systemName: voiceEnabled ? "speaker.wave.2.fill" : "speaker.slash.fill")
+                            .foregroundStyle(voiceEnabled ? Palette.green : Palette.textDim)
+                    }
                 }
             }
             .onAppear { tracker.requestPermission() }

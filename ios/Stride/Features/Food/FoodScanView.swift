@@ -2,6 +2,14 @@ import SwiftUI
 import UIKit
 import PhotosUI
 
+enum FoodScanMode: String, CaseIterable, Identifiable {
+    case meal = "拍餐食"
+    case barcode = "扫条形码"
+    case label = "扫营养表"
+
+    var id: String { rawValue }
+}
+
 struct FoodScanView: View {
     @EnvironmentObject private var store: AppStore
     @EnvironmentObject private var ai: AISettings
@@ -9,6 +17,8 @@ struct FoodScanView: View {
 
     var startWithPhotoPicker: Bool = false
 
+    @State private var scanMode: FoodScanMode = .meal
+    @State private var showBarcodeScanner = false
     @State private var pickerItem: PhotosPickerItem?
     @State private var showAutoPicker = false
     @State private var didAutoPresentPicker = false
@@ -19,6 +29,7 @@ struct FoodScanView: View {
     @State private var errorText: String?
     @State private var query = ""
     @State private var recognizedByAI = false
+    @Namespace private var modeNS
 
     private var usedToday: Int { store.state.quotas.used("food") }
     private var remaining: Int { Gate.foodRemaining(used: usedToday) }
@@ -33,7 +44,12 @@ struct FoodScanView: View {
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: 14) {
                         quotaBar
-                        photoCard
+                        modePicker
+                        if scanMode == .barcode {
+                            barcodeCard
+                        } else {
+                            photoCard
+                        }
 
                         if let errorText {
                             errorCard(errorText)
@@ -59,6 +75,11 @@ struct FoodScanView: View {
                 }
             }
             .photosPicker(isPresented: $showAutoPicker, selection: $pickerItem, matching: .images, photoLibrary: .shared())
+            .sheet(isPresented: $showBarcodeScanner) {
+                BarcodeScannerSheet { code in
+                    Task { await handleBarcode(code) }
+                }
+            }
             .onAppear {
                 if startWithPhotoPicker && !didAutoPresentPicker {
                     didAutoPresentPicker = true
@@ -98,6 +119,68 @@ struct FoodScanView: View {
         .card(radius: 18, fill: Palette.card, stroke: Palette.stroke)
     }
 
+    // MARK: - 识别模式切换与条形码卡片
+
+    private var modePicker: some View {
+        HStack(spacing: 4) {
+            ForEach(FoodScanMode.allCases) { mode in
+                let active = scanMode == mode
+                Button {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.78)) {
+                        scanMode = mode
+                        errorText = nil
+                    }
+                } label: {
+                    Text(mode.rawValue)
+                        .font(.system(size: 13, weight: active ? .semibold : .medium))
+                        .foregroundStyle(active ? Color.black : Palette.textDim)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 8)
+                        .background {
+                            if active {
+                                Capsule().fill(Color.white)
+                                    .matchedGeometryEffect(id: "foodScanMode", in: modeNS)
+                            }
+                        }
+                }
+                .buttonStyle(.stridePress)
+            }
+        }
+        .padding(4)
+        .background(Capsule().fill(Palette.card))
+        .sensoryFeedback(.selection, trigger: scanMode)
+    }
+
+    private var barcodeCard: some View {
+        Button {
+            showBarcodeScanner = true
+        } label: {
+            VStack(spacing: 10) {
+                if busy {
+                    ProgressView().tint(Palette.green)
+                    Text("正在检索商品营养数据…")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundStyle(Palette.textDim)
+                } else {
+                    Image(systemName: "barcode.viewfinder")
+                        .font(.system(size: 28, weight: .light))
+                        .foregroundStyle(Palette.green)
+                    Text("扫描商品条形码 / 手动输入")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(Palette.text)
+                    Text("支持常见零食饮料及 Open Food Facts 数据库")
+                        .font(.system(size: 12))
+                        .foregroundStyle(Palette.textFaint)
+                }
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 34)
+            .card(radius: 24, fill: Palette.cardSoft, stroke: Palette.stroke)
+        }
+        .buttonStyle(.strideCard)
+        .disabled(busy)
+    }
+
     // MARK: - 拍照
 
     private var photoCard: some View {
@@ -111,13 +194,13 @@ struct FoodScanView: View {
                         .font(.system(size: 14, weight: .medium))
                         .foregroundStyle(Palette.textDim)
                 } else {
-                    Image(systemName: "camera.fill")
+                    Image(systemName: scanMode == .label ? "doc.text.viewfinder" : "camera.fill")
                         .font(.system(size: 26, weight: .light))
                         .foregroundStyle(Palette.text)
-                    Text("拍一张 / 选一张")
+                    Text(scanMode == .label ? "拍营养成分表 / 选一张" : "拍一张 / 选一张")
                         .font(.system(size: 15, weight: .semibold))
                         .foregroundStyle(Palette.text)
-                    Text("拍盘子比拍单个食物更准")
+                    Text(scanMode == .label ? "拍包装背面“营养成分表”即可自动换算每 100g 热量" : "拍盘子比拍单个食物更准")
                         .font(.system(size: 12))
                         .foregroundStyle(Palette.textFaint)
                 }
@@ -329,11 +412,28 @@ struct FoodScanView: View {
                 return
             }
             // @State 的 setter 是 nonmutating，直接在回调里赋值即可。
-            let result = try await FoodRecognition.estimate(image: image, config: ai.config, onRetry: { retryAttempt = $0 })
+            let result = if scanMode == .label {
+                try await FoodRecognition.estimateNutritionLabel(image: image, config: ai.config, onRetry: { retryAttempt = $0 })
+            } else {
+                try await FoodRecognition.estimate(image: image, config: ai.config, onRetry: { retryAttempt = $0 })
+            }
             items = result
             recognizedByAI = true
             store.state.quotas.bump("food")
             store.saveNow()
+        } catch {
+            errorText = error.localizedDescription
+        }
+    }
+
+    private func handleBarcode(_ code: String) async {
+        errorText = nil
+        busy = true
+        defer { busy = false }
+        do {
+            let found = try await BarcodeFoodLookup.lookup(barcode: code)
+            items = [found]
+            recognizedByAI = false
         } catch {
             errorText = error.localizedDescription
         }
