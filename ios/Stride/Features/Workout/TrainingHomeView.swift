@@ -335,75 +335,18 @@ struct ExerciseGroupBox: Identifiable {
 
 struct ExerciseLibraryView: View {
     @Environment(\.dismiss) private var dismiss
-    @State private var query = ""
     let onPick: (Exercise) -> Void
-
-    private var groups: [ExerciseGroupBox] {
-        let filtered = SeedData.library.filter {
-            query.isEmpty || $0.name.localizedCaseInsensitiveContains(query)
-        }
-        return MuscleGroup.allCases.compactMap { g in
-            let list = filtered.filter { $0.group == g }
-            return list.isEmpty ? nil : ExerciseGroupBox(group: g, list: list)
-        }
-    }
 
     var body: some View {
         NavigationStack {
-            ZStack {
-                ScreenBackground()
-                ScrollView {
-                    VStack(spacing: 16) {
-                        if groups.isEmpty {
-                            EmptyHint(icon: "magnifyingglass", title: "没找到", message: "换个关键词试试。")
-                        }
-                        ForEach(groups) { box in
-                            VStack(alignment: .leading, spacing: 8) {
-                                Text(box.group.rawValue)
-                                    .font(.system(size: 13, weight: .bold))
-                                    .foregroundStyle(box.group.tint)
-                                ForEach(box.list) { exercise in
-                                    Button {
-                                        onPick(exercise)
-                                        dismiss()
-                                    } label: {
-                                        HStack {
-                                            VStack(alignment: .leading, spacing: 2) {
-                                                Text(exercise.name)
-                                                    .font(.system(size: 15, weight: .medium))
-                                                    .foregroundStyle(Palette.text)
-                                                Text(exercise.cue)
-                                                    .font(.system(size: 11))
-                                                    .foregroundStyle(Palette.textFaint)
-                                                    .lineLimit(1)
-                                            }
-                                            Spacer()
-                                            Text(exercise.equipment.rawValue)
-                                                .font(.system(size: 11, weight: .medium))
-                                                .foregroundStyle(Palette.textDim)
-                                                .padding(.horizontal, 8)
-                                                .padding(.vertical, 4)
-                                                .background(Capsule().fill(Palette.cardHigh))
-                                        }
-                                        .padding(13)
-                                        .card(radius: 16, fill: Palette.card, stroke: Palette.stroke)
-                                    }
-                                    .buttonStyle(.plain)
-                                }
-                            }
-                        }
+            ExerciseVideoLibraryView(onPick: onPick, embeddedInPlanHub: false)
+                .navigationTitle("动作视频库")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button("关闭") { dismiss() }.foregroundStyle(Palette.textDim)
                     }
-                    .padding(Metrics.page)
                 }
-            }
-            .searchable(text: $query, prompt: "搜动作")
-            .navigationTitle("动作库")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("关闭") { dismiss() }.foregroundStyle(Palette.textDim)
-                }
-            }
         }
     }
 }

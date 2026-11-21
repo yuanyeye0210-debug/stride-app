@@ -4,6 +4,7 @@ enum PlanSubTab: String, CaseIterable, Identifiable {
     case schedule = "计划"
     case calendar = "日历"
     case templates = "模板"
+    case exercises = "动作库"
 
     var id: String { rawValue }
 }
@@ -34,6 +35,8 @@ struct PlanHubView: View {
                     PlanCalendarView(month: $calendarMonth)
                 case .templates:
                     TemplateLibraryView(onCreateTemplate: { showCreateTemplate = true })
+                case .exercises:
+                    ExerciseVideoLibraryView(embeddedInPlanHub: true)
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -73,9 +76,10 @@ struct PlanHubView: View {
                         }
                     } label: {
                         Text(item.rawValue)
-                            .font(.system(size: 14, weight: active ? .semibold : .medium))
+                            .font(.system(size: 13.5, weight: active ? .semibold : .medium))
                             .foregroundStyle(active ? Color.white : Color.white.opacity(0.68))
-                            .padding(.horizontal, 14)
+                            .lineLimit(1)
+                            .padding(.horizontal, 11)
                             .padding(.vertical, 9)
                             .background {
                                 if active {
@@ -180,8 +184,21 @@ struct PlanHubView: View {
                     .frame(width: 42, height: 42)
                     .liquidGlassCapsule(tint: Color.black.opacity(0.45))
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.stridePress)
             .accessibilityLabel("我的自定义模板")
+
+        case .exercises:
+            Button {
+                showQuickSession = true
+            } label: {
+                Image(systemName: "plus")
+                    .font(.system(size: 17, weight: .bold))
+                    .foregroundStyle(Color.black)
+                    .frame(width: 42, height: 42)
+                    .background(Circle().fill(Palette.yellow))
+            }
+            .buttonStyle(.stridePress)
+            .accessibilityLabel("快速新建训练")
         }
     }
 
