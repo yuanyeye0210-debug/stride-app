@@ -74,23 +74,28 @@ private struct PulseWaveShape: Shape {
 
 struct FloatingTabBar: View {
     @Binding var selection: Int
+    @Namespace private var tabNS
 
     var body: some View {
         HStack(spacing: 4) {
             tabButton(title: "主页", tag: 0) { active in
                 HomePulseIcon(active: active)
+                    .scaleEffect(active ? 1.04 : 0.96)
             }
             tabButton(title: "计划", tag: 1) { active in
                 Image(systemName: active ? "list.clipboard.fill" : "list.clipboard")
                     .font(.system(size: 18, weight: .semibold))
+                    .symbolEffect(.bounce.down, value: active)
             }
             tabButton(title: "记录", tag: 2) { active in
                 Image(systemName: active ? "chart.bar.fill" : "chart.bar")
                     .font(.system(size: 18, weight: .semibold))
+                    .symbolEffect(.bounce.down, value: active)
             }
             tabButton(title: "自己", tag: 3) { active in
                 Image(systemName: active ? "person.crop.circle.fill" : "person.crop.circle")
                     .font(.system(size: 19, weight: .semibold))
+                    .symbolEffect(.bounce.down, value: active)
             }
         }
         .padding(.horizontal, 6)
@@ -98,6 +103,7 @@ struct FloatingTabBar: View {
         .liquidGlassCapsule(tint: Color.black.opacity(0.45))
         .padding(.horizontal, 22)
         .padding(.bottom, 6)
+        .sensoryFeedback(.selection, trigger: selection)
     }
 
     private func tabButton<Icon: View>(
@@ -107,7 +113,7 @@ struct FloatingTabBar: View {
     ) -> some View {
         let on = selection == tag
         return Button {
-            withAnimation(.spring(response: 0.28, dampingFraction: 0.82)) {
+            withAnimation(.spring(response: 0.34, dampingFraction: 0.76)) {
                 selection = tag
             }
         } label: {
@@ -123,12 +129,13 @@ struct FloatingTabBar: View {
             .background {
                 if on {
                     Capsule(style: .continuous)
-                        .fill(Color.white.opacity(0.14))
+                        .fill(Color.white.opacity(0.16))
+                        .matchedGeometryEffect(id: "floatingTabCapsule", in: tabNS)
                 }
             }
             .contentShape(Capsule())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(StridePressButtonStyle(scale: 0.94, pressedOpacity: 0.9, haptic: nil))
         .accessibilityAddTraits(on ? .isSelected : [])
     }
 }
@@ -141,13 +148,15 @@ struct HomeTopSegmentBar: View {
     var onFavoriteMusic: () -> Void
     var onQuickRun: () -> Void
 
+    @Namespace private var channelNS
+
     var body: some View {
         HStack(spacing: 12) {
             HStack(spacing: 2) {
                 ForEach(HomeChannel.allCases) { item in
                     let active = channel == item
                     Button {
-                        withAnimation(.spring(response: 0.28, dampingFraction: 0.82)) {
+                        withAnimation(.spring(response: 0.34, dampingFraction: 0.76)) {
                             channel = item
                         }
                     } label: {
@@ -164,15 +173,17 @@ struct HomeTopSegmentBar: View {
                                             Capsule(style: .continuous)
                                                 .strokeBorder(Color.white.opacity(0.18), lineWidth: 0.6)
                                         )
+                                        .matchedGeometryEffect(id: "homeChannelCapsule", in: channelNS)
                                 }
                             }
                             .contentShape(Capsule())
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(StridePressButtonStyle(scale: 0.95, pressedOpacity: 0.9, haptic: nil))
                 }
             }
             .padding(4)
             .liquidGlassCapsule(tint: Color.black.opacity(0.42))
+            .sensoryFeedback(.selection, trigger: channel)
 
             contextTrailingButton
         }
@@ -185,6 +196,7 @@ struct HomeTopSegmentBar: View {
         switch channel {
         case .home, .plugins:
             AIGlowCircleButton(action: onAI)
+                .buttonStyle(.stridePress)
         case .music:
             Button(action: onFavoriteMusic) {
                 Image(systemName: "heart")
@@ -193,7 +205,7 @@ struct HomeTopSegmentBar: View {
                     .frame(width: 44, height: 44)
                     .liquidGlassCapsule(tint: Color.black.opacity(0.45))
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.stridePress)
             .accessibilityLabel("音乐收藏与歌词")
         case .run:
             Button(action: onQuickRun) {
@@ -203,7 +215,7 @@ struct HomeTopSegmentBar: View {
                     .frame(width: 44, height: 44)
                     .liquidGlassCapsule(tint: Color.black.opacity(0.45))
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.stridePress)
             .accessibilityLabel("快速开始跑步")
         }
     }

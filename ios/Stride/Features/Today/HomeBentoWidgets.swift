@@ -25,7 +25,7 @@ struct AIHabitBannerCard: View {
             .padding(.vertical, 22)
             .card(radius: Metrics.radius, fill: Palette.card, stroke: Palette.stroke)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.strideCard)
     }
 
     private var habitDotMatrix: some View {
@@ -67,6 +67,7 @@ struct WaterBentoCard: View {
                     .foregroundStyle(Palette.text)
                     .minimumScaleFactor(0.75)
                     .lineLimit(1)
+                    .numericRoll(value: ml)
                 Text("/ \(WaterLog.grouped(goal)) 毫升")
                     .font(.system(size: 11.5, weight: .medium))
                     .foregroundStyle(Palette.textDim)
@@ -78,6 +79,7 @@ struct WaterBentoCard: View {
             ZStack(alignment: .bottom) {
                 WaterSemiDial(progress: Double(ml) / Double(max(1, goal)))
                     .frame(height: 82)
+                    .animation(.spring(response: 0.45, dampingFraction: 0.8), value: ml)
 
                 HStack(spacing: 6) {
                     Button {
@@ -90,7 +92,7 @@ struct WaterBentoCard: View {
                             .background(Circle().fill(Color.white.opacity(0.14)))
                             .overlay(Circle().strokeBorder(Color.white.opacity(0.18), lineWidth: 0.7))
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.stridePress)
 
                     Button {
                         if let idx = stepOptions.firstIndex(of: stepMl) {

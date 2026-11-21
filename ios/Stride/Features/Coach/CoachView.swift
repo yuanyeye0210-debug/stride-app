@@ -7,6 +7,8 @@ struct CoachView: View {
     @State private var input = ""
     @State private var sending = false
     @State private var retryAttempt: Int?
+    @State private var activeTask: Task<Void, Never>?
+    @State private var replyToken = 0
     @State private var toast: String?
 
     private var messages: [ChatTurn] { store.state.chats }
@@ -34,16 +36,24 @@ struct CoachView: View {
                             ForEach(messages) { turn in
                                 bubble(turn)
                                     .id(turn.id)
+                                    .transition(.asymmetric(
+                                        insertion: .move(edge: .bottom).combined(with: .opacity).combined(with: .scale(scale: 0.94)),
+                                        removal: .opacity
+                                    ))
                             }
                             if sending {
                                 typing
                                     .id("typing")
+                                    .transition(.move(edge: .bottom).combined(with: .opacity))
                             }
                         }
                         .padding(.horizontal, Metrics.page)
                         .padding(.top, 8)
                         .padding(.bottom, 16)
+                        .animation(.spring(response: 0.34, dampingFraction: 0.8), value: messages.count)
+                        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: sending)
                     }
+                    .scrollDismissesKeyboard(.interactively)
                     .onChange(of: messages.count) { _, _ in
                         withAnimation(.easeOut(duration: 0.25)) {
                             proxy.scrollTo(messages.last?.id, anchor: .bottom)
@@ -60,6 +70,8 @@ struct CoachView: View {
         }
         .navigationTitle("教练")
         .navigationBarTitleDisplayMode(.inline)
+        .sensoryFeedback(.success, trigger: replyToken)
+        .onDisappear { activeTask?.cancel() }
         .toast($toast)
     }
 
@@ -72,6 +84,7 @@ struct CoachView: View {
                 Image(systemName: "sparkles")
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(Palette.purple)
+                    .symbolEffect(.pulse, isActive: sending)
             }
             VStack(alignment: .leading, spacing: 2) {
                 Text(ai.isConfigured ? "AI 教练 · Gemini" : "AI 教练 · 本地模式")
@@ -87,6 +100,7 @@ struct CoachView: View {
                 Text("\(remaining)")
                     .font(.system(size: 15, weight: .bold, design: .rounded))
                     .foregroundStyle(Palette.green)
+                    .numericRoll(value: remaining, countsDown: true)
                 Text("剩余")
                     .font(.system(size: 9))
                     .foregroundStyle(Palette.textFaint)
@@ -117,7 +131,7 @@ struct CoachView: View {
                         .background(Capsule().fill(Palette.card))
                         .overlay(Capsule().strokeBorder(Palette.stroke, lineWidth: 1))
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.stridePress)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -153,13 +167,28 @@ struct CoachView: View {
                         .strokeBorder(turn.role == .user ? .clear : Palette.stroke, lineWidth: 1)
                 )
                 .textSelection(.enabled)
+                .contextMenu {
+                    Button {
+                        UIPasteboard.general.string = turn.text
+                        toast = "已复制"
+                    } label: {
+                        Label("复制内容", systemImage: "doc.on.doc")
+                    }
+                    if turn.role == .user {
+                        Button {
+                            triggerSend(text: turn.text)
+                        } label: {
+                            Label("再问一次", systemImage: "arrow.clockwise")
+                        }
+                    }
+                }
 
             if turn.role == .coach { Spacer(minLength: 44) }
         }
     }
 
     private var typing: some View {
-        HStack {
+        HStack(spacing: 8) {
             HStack(spacing: 8) {
                 HStack(spacing: 4) {
                     ForEach(0..<3) { i in
@@ -170,16 +199,26 @@ struct CoachView: View {
                             .animation(.easeInOut(duration: 0.6).repeatForever().delay(Double(i) * 0.15), value: sending)
                     }
                 }
-                // 重试时显示第几次重试，而不是一直只显示“正在输入”。
-                if let attempt = retryAttempt {
-                    Text(AIRetryPolicy.retryStatusText(nextAttempt: attempt) ?? "重试中…")
-                        .font(.system(size: 13))
-                        .foregroundStyle(Palette.textDim)
-                }
+                Text(retryAttempt.flatMap { AIRetryPolicy.retryStatusText(nextAttempt: $0) } ?? "思考中…")
+                    .font(.system(size: 12.5))
+                    .foregroundStyle(Palette.textDim)
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 13)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 11)
             .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(Palette.card))
+
+            Button {
+                activeTask?.cancel()
+            } label: {
+                Text("直接本地回复")
+                    .font(.system(size: 11.5, weight: .semibold))
+                    .foregroundStyle(Palette.green)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 7)
+                    .background(Capsule().fill(Palette.green.opacity(0.14)))
+            }
+            .buttonStyle(.stridePress)
+
             Spacer()
         }
     }
@@ -198,7 +237,7 @@ struct CoachView: View {
                 .background(RoundedRectangle(cornerRadius: 20, style: .continuous).fill(Palette.card))
 
             Button {
-                Task { await send() }
+                triggerSend(text: input)
             } label: {
                 Image(systemName: "arrow.up")
                     .font(.system(size: 15, weight: .bold))
@@ -206,7 +245,7 @@ struct CoachView: View {
                     .frame(width: 42, height: 42)
                     .background(Circle().fill(input.isEmpty || sending ? Palette.card : Color.white))
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.stridePress)
             .disabled(input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || sending)
         }
         .padding(.horizontal, Metrics.page)
@@ -215,8 +254,8 @@ struct CoachView: View {
         .overlay(Rectangle().fill(Palette.stroke).frame(height: 0.5), alignment: .top)
     }
 
-    private func send() async {
-        let text = input.trimmingCharacters(in: .whitespacesAndNewlines)
+    private func triggerSend(text raw: String) {
+        let text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty, !sending else { return }
 
         guard Gate.canUseCoach(used: userCount) else {
@@ -224,13 +263,19 @@ struct CoachView: View {
             return
         }
 
-        input = ""
+        if raw == input { input = "" }
         store.appendChat(ChatTurn(role: .user, text: text))
         sending = true
-        defer { sending = false; retryAttempt = nil }
 
-        // @State 的 setter 是 nonmutating，直接在回调里赋值即可。
-        let result = await CoachEngine.ask(text, store: store, config: ai.config, onRetry: { retryAttempt = $0 })
-        store.appendChat(ChatTurn(role: .coach, text: result.answer))
+        activeTask = Task {
+            let result = await CoachEngine.ask(text, store: store, config: ai.config, onRetry: { retryAttempt = $0 })
+            await MainActor.run {
+                store.appendChat(ChatTurn(role: .coach, text: result.answer))
+                sending = false
+                retryAttempt = nil
+                replyToken += 1
+                activeTask = nil
+            }
+        }
     }
 }

@@ -57,11 +57,11 @@ enum AIUseCase: Equatable {
     var geminiModelChain: [String] {
         switch self {
         case .coachChat:
-            return ["gemini-3.8-flash", "gemini-flash-latest", "gemini-flash-lite-latest"]
+            return ["gemini-flash-lite-latest", "gemini-flash-latest", "gemini-3.8-flash"]
         case .coachDeepAnalysis:
-            return ["gemini-pro-latest", "gemini-3.8-flash", "gemini-flash-latest", "gemini-flash-lite-latest"]
+            return ["gemini-pro-latest", "gemini-flash-latest", "gemini-flash-lite-latest"]
         case .foodVision:
-            return ["gemini-3.8-flash", "gemini-flash-latest", "gemini-flash-lite-latest"]
+            return ["gemini-flash-latest", "gemini-3.8-flash", "gemini-flash-lite-latest"]
         }
     }
 
@@ -904,11 +904,14 @@ struct AIClient {
         var lastError: Error = AIError.badResponse("无可用 Gemini 模型")
         for (index, model) in candidates.enumerated() {
             do {
-                let useRetry = index == candidates.count - 1 ? onRetry : nil
-                return try await sendGemini(body, model: model, config: config, onRetry: useRetry)
+                return try await sendGeminiOnce(body, model: model, config: config)
             } catch is CancellationError {
                 throw CancellationError()
             } catch let error as AIError where shouldFallbackModel(error) && index < candidates.count - 1 {
+                // 若是整条网络通道不可达（超时或断网），不继续串行干等剩余模型，直接快速回落本地引擎。
+                if error == .timeout || error == .offline {
+                    throw error
+                }
                 lastError = error
                 await MainActor.run { onRetry?(index + 2) }
                 continue
@@ -917,6 +920,44 @@ struct AIClient {
             }
         }
         throw lastError
+    }
+
+    private static func sendGeminiOnce(
+        _ body: GeminiRequest,
+        model: String,
+        config: AIConfig
+    ) async throws -> String {
+        guard let url = geminiEndpointURL(baseURL: config.baseURL, model: model) else {
+            throw AIError.badResponse("Gemini 接口地址或模型名不合法")
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.timeoutInterval = AIRetryPolicy.timeoutInterval
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue(config.apiKey.trimmingCharacters(in: .whitespacesAndNewlines), forHTTPHeaderField: "x-goog-api-key")
+        request.httpBody = try JSONEncoder().encode(body)
+
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+            guard let http = response as? HTTPURLResponse else {
+                throw AIError.badResponse("没有 HTTP 响应")
+            }
+            guard (200..<300).contains(http.statusCode) else {
+                let message = extractErrorMessage(from: data)
+                throw AIRetryPolicy.mapHTTPStatus(http.statusCode, body: message)
+            }
+            return try parseGeminiResponse(data)
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch let aiError as AIError {
+            throw aiError
+        } catch {
+            if let urlError = error as? URLError, urlError.code == .cancelled {
+                throw CancellationError()
+            }
+            throw AIRetryPolicy.mapNetworkError(error, statusCode: nil)
+        }
     }
 
     private static func shouldFallbackModel(_ error: AIError) -> Bool {

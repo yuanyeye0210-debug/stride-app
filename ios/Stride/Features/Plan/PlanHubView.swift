@@ -12,6 +12,7 @@ struct PlanHubView: View {
     @EnvironmentObject private var store: AppStore
 
     @State private var subTab: PlanSubTab = .schedule
+    @Namespace private var planSubTabNS
     @State private var calendarMonth: Date = Date()
     @State private var showQuickSession = false
     @State private var showCardioRun = false
@@ -84,14 +85,16 @@ struct PlanHubView: View {
                                             Capsule(style: .continuous)
                                                 .strokeBorder(Color.white.opacity(0.18), lineWidth: 0.6)
                                         )
+                                        .matchedGeometryEffect(id: "planSubTabCapsule", in: planSubTabNS)
                                 }
                             }
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(StridePressButtonStyle(scale: 0.95, pressedOpacity: 0.9, haptic: nil))
                 }
             }
             .padding(4)
             .liquidGlassCapsule(tint: Color.black.opacity(0.45))
+            .sensoryFeedback(.selection, trigger: subTab)
 
             Spacer()
 
@@ -116,7 +119,7 @@ struct PlanHubView: View {
                         .frame(height: 42)
                         .liquidGlassCapsule(tint: Color.black.opacity(0.45))
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.stridePress)
 
                 Button {
                     showQuickSession = true
@@ -127,7 +130,7 @@ struct PlanHubView: View {
                         .frame(width: 42, height: 42)
                         .background(Circle().fill(Palette.yellow))
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.stridePress)
                 .accessibilityLabel("快速新建训练")
             }
 

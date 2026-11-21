@@ -37,16 +37,25 @@ struct ProgressViewScreen: View {
                 VStack(spacing: 14) {
                     headerBar
                     photoFanCard
+                        .strideScrollDepth(minScale: 0.96, minOpacity: 0.85)
                     dualWaterAndDietRow
+                        .strideScrollDepth(minScale: 0.96, minOpacity: 0.85)
                     todayStateCard
+                        .strideScrollDepth(minScale: 0.96, minOpacity: 0.85)
                     trainingRecordCard
+                        .strideScrollDepth(minScale: 0.96, minOpacity: 0.85)
                     weightRecordCard
+                        .strideScrollDepth(minScale: 0.96, minOpacity: 0.85)
                     sleepMoonCard
+                        .strideScrollDepth(minScale: 0.96, minOpacity: 0.85)
                     highlightsSection
                 }
                 .padding(.horizontal, Metrics.page)
                 .padding(.top, 8)
                 .padding(.bottom, Metrics.floatingTabBottomInset + 64)
+            }
+            .refreshable {
+                store.triggerHaptic(.light)
             }
 
             // 右下角悬浮毛玻璃 + 添加记录
@@ -83,15 +92,18 @@ struct ProgressViewScreen: View {
         }
         .sheet(isPresented: $showWeightSheet) {
             WeightLogSheet()
+                .strideSheetDetents([.medium, .large])
         }
         .sheet(isPresented: $showAllInsights) {
             AllInsightsSheet(items: insights)
+                .strideSheetDetents([.medium, .large])
         }
         .sheet(isPresented: $showSessionSheet) {
             SessionView(draft: .empty())
         }
         .sheet(isPresented: $showCaffeineSheet) {
             CaffeineSheet()
+                .strideSheetDetents([.medium, .large])
         }
         .toast($toast)
     }

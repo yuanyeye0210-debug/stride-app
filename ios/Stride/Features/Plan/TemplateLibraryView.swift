@@ -218,13 +218,40 @@ struct TemplateLibraryView: View {
                 Button { selectedWeekPlan = plan } label: {
                     WeekPlanCard(template: plan)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.strideCard)
+                .strideScrollDepth(minScale: 0.95, minOpacity: 0.85)
+                .contextMenu {
+                    Button {
+                        store.applyWeekTemplate(plan)
+                    } label: {
+                        Label("应用到本周计划", systemImage: "calendar.badge.plus")
+                    }
+                    Button {
+                        store.toggleTemplateFavorite(plan.id)
+                    } label: {
+                        Label(
+                            store.isTemplateFavorite(plan.id) ? "取消收藏" : "收藏周计划",
+                            systemImage: store.isTemplateFavorite(plan.id) ? "heart.slash" : "heart"
+                        )
+                    }
+                }
             }
             ForEach(singles) { tpl in
                 Button { selectedSingle = tpl } label: {
                     SingleTemplateCard(template: tpl)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.strideCard)
+                .strideScrollDepth(minScale: 0.95, minOpacity: 0.85)
+                .contextMenu {
+                    Button {
+                        store.toggleTemplateFavorite(tpl.id)
+                    } label: {
+                        Label(
+                            store.isTemplateFavorite(tpl.id) ? "取消收藏" : "收藏模板",
+                            systemImage: store.isTemplateFavorite(tpl.id) ? "heart.slash" : "heart"
+                        )
+                    }
+                }
             }
         }
         .padding(.horizontal, Metrics.page)
@@ -238,7 +265,8 @@ struct TemplateLibraryView: View {
                 Button { selectedRunProgram = prog } label: {
                     RunProgramBannerCard(program: prog)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.strideCard)
+                .strideScrollDepth(minScale: 0.96, minOpacity: 0.85)
             }
         }
         .padding(.horizontal, Metrics.page)

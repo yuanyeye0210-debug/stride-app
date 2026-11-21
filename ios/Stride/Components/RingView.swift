@@ -6,18 +6,30 @@ struct RingView: View {
     var colors: [Color] = [Palette.green, Color(hex: 0x2AD4C8)]
     var track: Color = Palette.cardHigh
 
+    @State private var appeared = false
+
+    private var clampedProgress: Double {
+        appeared ? max(0.001, min(1, progress)) : 0.001
+    }
+
     var body: some View {
         ZStack {
             Circle()
                 .stroke(track, style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
             Circle()
-                .trim(from: 0, to: max(0.001, min(1, progress)))
+                .trim(from: 0, to: clampedProgress)
                 .stroke(
                     AngularGradient(colors: colors + [colors.first ?? Palette.green], center: .center),
                     style: StrokeStyle(lineWidth: lineWidth, lineCap: .round)
                 )
                 .rotationEffect(.degrees(-90))
-                .animation(.easeOut(duration: 0.6), value: progress)
+                .animation(.spring(response: 0.72, dampingFraction: 0.84), value: clampedProgress)
+                .animation(.spring(response: 0.55, dampingFraction: 0.84), value: progress)
+        }
+        .onAppear {
+            withAnimation(.spring(response: 0.72, dampingFraction: 0.84)) {
+                appeared = true
+            }
         }
     }
 }
@@ -39,6 +51,7 @@ struct RingStat: View {
                     .foregroundStyle(Palette.text)
                     .minimumScaleFactor(0.5)
                     .lineLimit(1)
+                    .numericRoll(value: value)
                 Text(unit)
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(Palette.textDim)
@@ -57,16 +70,22 @@ struct BarProgress: View {
     var color: Color = Palette.green
     var height: CGFloat = 6
 
+    @State private var appeared = false
+
     var body: some View {
         GeometryReader { geo in
+            let target = appeared ? min(1, max(0, progress)) : 0
             ZStack(alignment: .leading) {
                 Capsule().fill(Palette.cardHigh)
                 Capsule()
                     .fill(color)
-                    .frame(width: max(3, geo.size.width * min(1, max(0, progress))))
+                    .frame(width: max(3, geo.size.width * target))
+                    .animation(.spring(response: 0.65, dampingFraction: 0.84), value: target)
+                    .animation(.spring(response: 0.45, dampingFraction: 0.82), value: progress)
             }
         }
         .frame(height: height)
+        .onAppear { appeared = true }
     }
 }
 

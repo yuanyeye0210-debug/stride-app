@@ -73,9 +73,22 @@ enum CoachEngine {
                     onRetry: onRetry
                 )
                 return (answer, true)
+            } catch is CancellationError {
+                let local = localReply(text, store: store)
+                return (local + "\n\n（已切回本机教练即时回复）", false)
+            } catch let aiError as AIError {
+                let local = localReply(text, store: store)
+                let note: String
+                switch aiError {
+                case .timeout, .offline:
+                    note = "（当前网络直连 Gemini 超时，已切换为本机教练回复；如需云端大模型请开启外网环境）"
+                default:
+                    note = "（云端教练暂不可用：\(aiError.localizedDescription)，以上为本机分析）"
+                }
+                return (local + "\n\n\(note)", false)
             } catch {
                 let local = localReply(text, store: store)
-                return (local + "\n\n（AI 服务调用失败：\(error.localizedDescription)，以上是本地分析。）", false)
+                return (local + "\n\n（云端连接失败：\(error.localizedDescription)，以上为本机分析。）", false)
             }
         }
         return (localReply(text, store: store), false)
@@ -84,7 +97,34 @@ enum CoachEngine {
     // MARK: - 本地规则
 
     static func localReply(_ text: String, store: AppStore) -> String {
-        let q = text.lowercased()
+        let q = text.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+
+        if ["你好", "hi", "hello", "嗨", "哈喽", "在吗", "早", "晚上好"].contains(where: { q == $0 || q.hasPrefix($0) }) && q.count <= 12 {
+            let todayTitle = store.todaysPlannedDay?.title ?? "自由安排"
+            let n = store.todayNutrition
+            let p = store.state.profile
+            return """
+            在的，\(p.nickname)！今天计划是「\(todayTitle)」，已摄入 \(Int(n.kcal))/\(p.kcalTarget) kcal、蛋白 \(Int(n.p))g。
+            想问今日动作重量、配餐缺口还是恢复情况，直接告诉我。
+            """
+        }
+
+        if q.contains("减脂") || q.contains("瘦") || q.contains("刷脂") {
+            let p = store.state.profile
+            let n = store.todayNutrition
+            return """
+            减脂核心守住热量缺口与高蛋白：目标 \(p.kcalTarget) kcal / 蛋白 \(p.proteinTarget)g，今日还剩 \(max(0, p.kcalTarget - Int(n.kcal))) kcal。
+            力量训练维持大重量复合动作不掉肌肉，每周额外加 2–3 次 25 分钟中低强度有氧。
+            """
+        }
+
+        if q.contains("增肌") || q.contains("增重") || q.contains("维度") {
+            let p = store.state.profile
+            return """
+            增肌优先保证每周渐进超负荷：主项每 1–2 周尝试多推 1 次或加 2.5kg。
+            蛋白守住 \(p.proteinTarget)g/天，练后 2 小时内补足碳水与优质蛋白，睡眠确保 7 小时以上。
+            """
+        }
 
         if q.contains("痛") || q.contains("疼") || q.contains("伤") {
             return """

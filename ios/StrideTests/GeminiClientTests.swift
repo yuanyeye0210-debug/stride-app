@@ -17,14 +17,14 @@ final class GeminiClientTests: XCTestCase {
         XCTAssertEqual(CoachEngine.useCase(for: "帮我分析一下最近四周分化训练周期与瓶颈"), .coachDeepAnalysis)
 
         let chatChain = AIClient.geminiModelCandidates(primary: "", useCase: .coachChat)
-        XCTAssertEqual(chatChain, ["gemini-3.8-flash", "gemini-flash-latest", "gemini-flash-lite-latest"])
+        XCTAssertEqual(chatChain, ["gemini-flash-lite-latest", "gemini-flash-latest", "gemini-3.8-flash"])
 
         let deepChain = AIClient.geminiModelCandidates(primary: "", useCase: .coachDeepAnalysis)
         XCTAssertEqual(deepChain.first, "gemini-pro-latest")
         XCTAssertTrue(deepChain.contains("gemini-flash-lite-latest"))
 
         let visionChain = AIClient.geminiModelCandidates(primary: "", useCase: .foodVision)
-        XCTAssertEqual(visionChain, ["gemini-3.8-flash", "gemini-flash-latest", "gemini-flash-lite-latest"])
+        XCTAssertEqual(visionChain, ["gemini-flash-latest", "gemini-3.8-flash", "gemini-flash-lite-latest"])
     }
 
     func testLegacyJSONWithoutProviderDecodesBackwardCompatibly() throws {

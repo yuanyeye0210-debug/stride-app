@@ -52,6 +52,7 @@ struct SessionView: View {
     @State private var restTotal = 0
     @State private var showLibrary = false
     @State private var showFinishConfirm = false
+    @State private var setDoneToken = 0
     @State private var toast: String?
 
     private let ticker = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
@@ -84,8 +85,11 @@ struct SessionView: View {
 
                 if restLeft > 0 {
                     restBar
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
             }
+            .animation(.spring(response: 0.35, dampingFraction: 0.8), value: restLeft > 0)
+            .sensoryFeedback(.success, trigger: setDoneToken)
             .navigationTitle(draft.title)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -142,6 +146,7 @@ struct SessionView: View {
             Text(value)
                 .font(.system(size: 17, weight: .bold, design: .rounded))
                 .foregroundStyle(Palette.text)
+                .numericRoll(value: value)
             Text(label)
                 .font(.system(size: 10))
                 .foregroundStyle(Palette.textFaint)
@@ -271,13 +276,19 @@ struct SessionView: View {
                 .frame(width: 44)
 
             Button {
-                toggleSet(i: i, j: j)
+                withAnimation(.spring(response: 0.28, dampingFraction: 0.7)) {
+                    toggleSet(i: i, j: j)
+                }
+                if draft.exercises[i].sets[j].done {
+                    setDoneToken += 1
+                }
             } label: {
                 Image(systemName: set.done ? "checkmark.circle.fill" : "circle")
                     .font(.system(size: 21, weight: .medium))
                     .foregroundStyle(set.done ? Palette.green : Palette.strokeHi)
+                    .symbolEffect(.bounce, value: set.done)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.stridePress)
             .frame(width: 30)
         }
         .opacity(set.done ? 0.75 : 1)

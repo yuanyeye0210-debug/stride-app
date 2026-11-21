@@ -68,6 +68,7 @@ struct TodayView: View {
                 VStack(spacing: Metrics.gap) {
                     ForEach(bentoRows) { row in
                         rowView(row)
+                            .strideScrollDepth(minScale: 0.96, minOpacity: 0.85)
                     }
 
                     addWidgetButton
@@ -76,6 +77,13 @@ struct TodayView: View {
                 .padding(.horizontal, Metrics.page)
                 .padding(.top, 66) // 为顶部悬浮 Liquid Glass 分段胶囊栏留出空间
                 .padding(.bottom, Metrics.floatingTabBottomInset + 16)
+            }
+            .refreshable {
+                store.triggerHaptic(.light)
+                let metrics = await health.todayMetrics()
+                if metrics.steps > 0 || metrics.activeKcal > 0 {
+                    healthMetrics = metrics
+                }
             }
         }
         .toolbar(.hidden, for: .navigationBar)
@@ -99,20 +107,25 @@ struct TodayView: View {
         }
         .sheet(isPresented: $showWidgetManager) {
             HomeWidgetManagerSheet()
+                .strideSheetDetents([.medium, .large])
         }
         .sheet(isPresented: $showSupplementSheet) {
             SupplementSheet()
+                .strideSheetDetents([.medium, .large])
         }
         .sheet(isPresented: $showCaffeineSheet) {
             CaffeineSheet()
+                .strideSheetDetents([.medium, .large])
         }
         .sheet(isPresented: $showHabitSheet) {
             HabitInsightSheet(summary: habitSummary)
+                .strideSheetDetents([.medium, .large])
         }
         .sheet(isPresented: $showRecoverySheet) {
             MuscleRecoverySheet(items: recoveryItems) {
                 showWorkoutSheet = true
             }
+            .strideSheetDetents([.medium, .large])
         }
         .sheet(isPresented: $showActivitySheet) {
             ActivityDetailSheet(
@@ -124,6 +137,7 @@ struct TodayView: View {
                 onStartWorkout: { showWorkoutSheet = true },
                 onStartRun: { showRunSheet = true }
             )
+            .strideSheetDetents([.medium, .large])
         }
     }
 

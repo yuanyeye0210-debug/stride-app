@@ -117,7 +117,7 @@ struct PluginPlazaView: View {
                     RunningCollectionBanner(installed: runInstalled, total: runTotal)
                         .frame(width: 316, height: 186)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.strideCard)
 
                 Button {
                     selectedCollection = .strengthPack
@@ -125,7 +125,7 @@ struct PluginPlazaView: View {
                     StrengthCollectionBanner(installed: strInstalled, total: strTotal)
                         .frame(width: 316, height: 186)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.strideCard)
             }
             .padding(.horizontal, Metrics.page)
         }

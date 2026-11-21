@@ -8,8 +8,8 @@ import Foundation
 
 enum AIRetryPolicy {
 
-    static let maxAttempts = 3
-    static let timeoutInterval: TimeInterval = 30
+    static let maxAttempts = 2
+    static let timeoutInterval: TimeInterval = 10
 
     static func shouldRetry(error: AIError, attempt: Int) -> Bool {
         guard attempt < maxAttempts else { return false }

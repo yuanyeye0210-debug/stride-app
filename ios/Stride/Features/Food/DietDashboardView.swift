@@ -141,15 +141,19 @@ struct DietDashboardView: View {
         }
         .sheet(isPresented: $showCaffeineSheet) {
             CaffeineSheet()
+                .strideSheetDetents([.medium, .large])
         }
         .sheet(isPresented: $showSupplementSheet) {
             SupplementSheet()
+                .strideSheetDetents([.medium, .large])
         }
         .sheet(isPresented: $showCarbCycleSheet) {
             CarbCycleEditorSheet()
+                .strideSheetDetents([.medium, .large])
         }
         .sheet(isPresented: $showGoalsSheet) {
             NutritionGoalsSheet()
+                .strideSheetDetents([.medium, .large])
         }
         .sheet(isPresented: $showDatePicker) {
             NavigationStack {
@@ -184,6 +188,7 @@ struct DietDashboardView: View {
                 Text(WaterLog.grouped(waterMl))
                     .font(.system(size: 22, weight: .bold, design: .rounded))
                     .foregroundStyle(Palette.text)
+                    .numericRoll(value: waterMl)
                 Text("/ \(WaterLog.grouped(waterGoal)) 毫升")
                     .font(.system(size: 11))
                     .foregroundStyle(Palette.textDim)

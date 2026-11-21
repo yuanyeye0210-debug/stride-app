@@ -287,8 +287,9 @@ struct MusicDiscoverView: View {
                             .foregroundStyle(Color(hex: 0xFA2D48))
                             .frame(width: 32, height: 32)
                             .overlay(Circle().strokeBorder(Color(hex: 0xFA2D48), lineWidth: 1.5))
+                            .symbolEffect(.bounce, value: activeTrack?.id == track.id && isPlaying)
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.stridePress)
                 }
                 .padding(.horizontal, Metrics.page)
             }
@@ -353,11 +354,12 @@ struct MusicDiscoverView: View {
             Spacer()
 
             Button { showLyricsSheet = true } label: {
-                Image(systemName: "quote.bubble")
-                    .font(.system(size: 15))
-                    .foregroundStyle(Palette.textDim)
+                Image(systemName: "waveform")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(isPlaying ? Color(hex: 0xFA2D48) : Palette.textDim)
+                    .symbolEffect(.variableColor.iterative, isActive: isPlaying)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.stridePress)
 
             Button {
                 isPlaying.toggle()
@@ -367,12 +369,23 @@ struct MusicDiscoverView: View {
                     .foregroundStyle(Color.white)
                     .frame(width: 34, height: 34)
                     .background(Circle().fill(Color(hex: 0xFA2D48)))
+                    .contentTransition(.symbolEffect(.replace))
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.stridePress)
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 9)
         .liquidGlassCapsule(tint: Color.black.opacity(0.65))
+        .contentShape(Capsule())
+        .onTapGesture { showLyricsSheet = true }
+        .gesture(
+            DragGesture(minimumDistance: 16)
+                .onEnded { val in
+                    if val.translation.height < -16 {
+                        showLyricsSheet = true
+                    }
+                }
+        )
     }
 }
 

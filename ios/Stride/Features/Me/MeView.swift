@@ -101,12 +101,15 @@ struct MeView: View {
         }
         .sheet(isPresented: $showInjurySheet) {
             InjuryAvoidEditorSheet()
+                .strideSheetDetents([.medium, .large])
         }
         .sheet(isPresented: $showHeartRateSheet) {
             MaxHeartRateEditorSheet()
+                .strideSheetDetents([.medium, .large])
         }
         .sheet(isPresented: $showWidgetGuideSheet) {
             HomeWidgetManagerSheet()
+                .strideSheetDetents([.medium, .large])
         }
         .alert("\(Brand.nameZH) · \(Brand.name)", isPresented: $showBrandAlert) {
             Button("好的", role: .cancel) {}
