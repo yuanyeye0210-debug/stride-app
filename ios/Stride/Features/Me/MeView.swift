@@ -36,6 +36,7 @@ struct MeView: View {
     @State private var showSettingsSheet = false
     @State private var showProfileEdit = false
     @State private var showCoachSheet = false
+    @State private var showAISettings = false
     @State private var showInjurySheet = false
     @State private var showHeartRateSheet = false
     @State private var showWidgetGuideSheet = false
@@ -98,6 +99,9 @@ struct MeView: View {
         }
         .sheet(isPresented: $showCoachSheet) {
             NavigationStack { CoachView() }
+        }
+        .sheet(isPresented: $showAISettings) {
+            AISettingsView()
         }
         .sheet(isPresented: $showInjurySheet) {
             InjuryAvoidEditorSheet()
@@ -297,9 +301,10 @@ struct MeView: View {
 
                     Spacer()
 
-                    Text(ai.isConfigured ? ai.config.chatModel : "本地教练")
+                    Text(ai.isConfigured ? "\(ai.config.provider.shortName) · \(ai.config.chatModel)" : "本地教练")
                         .font(.system(size: 11.5))
                         .foregroundStyle(Palette.textDim)
+                        .lineLimit(1)
                     Image(systemName: "chevron.right")
                         .font(.system(size: 11, weight: .semibold))
                         .foregroundStyle(Palette.textFaint)
@@ -311,13 +316,13 @@ struct MeView: View {
 
             divider
 
-            NavigationLink {
-                AISettingsView()
+            Button {
+                showAISettings = true
             } label: {
                 SettingRow(
                     icon: "slider.horizontal.3",
                     title: "AI 服务接口与 Key",
-                    value: ai.isConfigured ? "已配置" : "未配置",
+                    value: ai.isConfigured ? "\(ai.config.provider.shortName) · 已配置" : "未配置",
                     tint: Palette.purple
                 )
             }

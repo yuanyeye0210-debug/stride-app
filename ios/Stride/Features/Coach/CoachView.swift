@@ -91,7 +91,7 @@ struct CoachView: View {
                 Text(ai.isConfigured ? "AI 教练 · 在线" : "AI 教练 · 本地模式")
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(Palette.text)
-                Text(ai.isConfigured ? "已接入 \(ai.config.chatModel)" : "配置 Key 后可对话；本地模式已覆盖常见问题")
+                Text(ai.isConfigured ? "已接入 \(ai.config.provider.shortName) · \(ai.config.chatModel)" : "配置 Gemini / OpenAI Key 后可对话；本地模式已覆盖常见问题")
                     .font(.system(size: 11))
                     .foregroundStyle(Palette.textFaint)
                     .lineLimit(1)

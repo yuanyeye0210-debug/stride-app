@@ -62,9 +62,20 @@
 
 ## 接一个真模型
 
-「自己 → AI 服务」填三项即可，兼容任何 OpenAI 协议端点：
+「个人 → AI 服务接口与 Key」支持 **Google Gemini（默认推荐，原生 REST 接口）** 与 **OpenAI 兼容协议**：
 
+**Google Gemini（默认，对话与拍照识食原生多模态一体）：**
 ```
+服务商     Google Gemini
+接口地址   https://generativelanguage.googleapis.com/v1beta   （或自建 Gemini 反代地址）
+API Key    AIza...                                           （Google AI Studio 申请）
+对话模型   gemini-2.5-flash                                  （也支持 gemini-2.5-pro / gemini-2.5-flash-lite / gemini-3-flash-preview / gemini-3.1-pro-preview）
+视觉模型   gemini-2.5-flash
+```
+
+**OpenAI 兼容端点：**
+```
+服务商     OpenAI 兼容
 接口地址   https://api.openai.com/v1        （或自建网关 / 国内兼容服务）
 API Key    sk-...
 对话模型   gpt-4o-mini
