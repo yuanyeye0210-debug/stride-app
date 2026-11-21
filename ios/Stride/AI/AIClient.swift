@@ -412,6 +412,8 @@ struct AIClient {
 
     /// Gemini 2.5 / 3 思考模型在输出正文前会占用内部推理预算，确保 maxOutputTokens 留有充足余量避免空回。
     static let geminiMinimumMaxOutputTokens = 2048
+    /// Gemini 原生请求单次快速超时，防止国内无代理直连时长时间卡死。
+    static let geminiTimeoutInterval: TimeInterval = 10
 
     struct Message: Encodable {
         let role: String
@@ -933,7 +935,7 @@ struct AIClient {
 
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
-        request.timeoutInterval = AIRetryPolicy.timeoutInterval
+        request.timeoutInterval = geminiTimeoutInterval
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue(config.apiKey.trimmingCharacters(in: .whitespacesAndNewlines), forHTTPHeaderField: "x-goog-api-key")
         request.httpBody = try JSONEncoder().encode(body)
@@ -983,7 +985,7 @@ struct AIClient {
 
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
-        request.timeoutInterval = AIRetryPolicy.timeoutInterval
+        request.timeoutInterval = geminiTimeoutInterval
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue(config.apiKey.trimmingCharacters(in: .whitespacesAndNewlines), forHTTPHeaderField: "x-goog-api-key")
         request.httpBody = try JSONEncoder().encode(body)
@@ -1007,7 +1009,7 @@ struct AIClient {
 
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
-        request.timeoutInterval = AIRetryPolicy.timeoutInterval
+        request.timeoutInterval = geminiTimeoutInterval
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("Bearer \(config.apiKey.trimmingCharacters(in: .whitespacesAndNewlines))", forHTTPHeaderField: "Authorization")
         request.httpBody = try JSONEncoder().encode(body)
