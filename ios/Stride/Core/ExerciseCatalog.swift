@@ -91,10 +91,9 @@ struct CatalogExercise: Identifiable, Codable, Hashable {
         let equip: Equipment = {
             switch equipment {
             case "barbell", "olympic barbell", "ez barbell", "trap bar": return .barbell
-            case "dumbbell": return .dumbbell
+            case "dumbbell", "kettlebell": return .dumbbell
             case "cable", "rope": return .cable
             case "body weight", "assisted", "weighted": return .bodyweight
-            case "kettlebell": return .kettlebell
             default: return .machine
             }
         }()
