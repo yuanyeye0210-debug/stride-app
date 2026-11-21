@@ -200,7 +200,8 @@ struct TodayView: View {
                         .frame(maxWidth: .infinity)
                 } else {
                     Color.clear
-                        .frame(maxWidth: .infinity, height: 178)
+                        .frame(height: 178)
+                        .frame(maxWidth: .infinity)
                 }
             }
         }
