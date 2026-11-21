@@ -93,20 +93,108 @@ enum SessionKind: String, Codable, CaseIterable, Identifiable {
     }
 }
 
+enum WorkoutIntensity: String, Codable, CaseIterable, Identifiable {
+    case easy = "轻松"
+    case moderate = "适中"
+    case hard = "困难"
+    case maxEffort = "竭尽全力"
+
+    var id: String { rawValue }
+
+    var color: Color {
+        switch self {
+        case .easy: return Palette.green
+        case .moderate: return Palette.indigo
+        case .hard: return Palette.purple
+        case .maxEffort: return Palette.ringMove
+        }
+    }
+}
+
 struct WorkoutSession: Identifiable, Codable, Hashable {
-    var id = UUID()
-    var date: Date = Date()
+    var id: UUID
+    var date: Date
     var title: String
-    var kind: SessionKind = .strength
-    var exercises: [LoggedExercise] = []
-    var durationSec: Int = 0
-    var kcal: Int = 0
-    var note: String = ""
-    var syncedToWatch: Bool = false
-    var writtenToHealth: Bool = false
+    var kind: SessionKind
+    var exercises: [LoggedExercise]
+    var durationSec: Int
+    var kcal: Int
+    var note: String
+    var syncedToWatch: Bool
+    var writtenToHealth: Bool
+    var sportLabel: String?
+    var intensityRaw: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id, date, title, kind, exercises, durationSec, kcal, note, syncedToWatch, writtenToHealth
+        case sportLabel, intensityRaw
+    }
+
+    init(
+        id: UUID = UUID(),
+        date: Date = Date(),
+        title: String,
+        kind: SessionKind = .strength,
+        exercises: [LoggedExercise] = [],
+        durationSec: Int = 0,
+        kcal: Int = 0,
+        note: String = "",
+        syncedToWatch: Bool = false,
+        writtenToHealth: Bool = false,
+        sportLabel: String? = nil,
+        intensityRaw: String? = nil
+    ) {
+        self.id = id
+        self.date = date
+        self.title = title
+        self.kind = kind
+        self.exercises = exercises
+        self.durationSec = durationSec
+        self.kcal = kcal
+        self.note = note
+        self.syncedToWatch = syncedToWatch
+        self.writtenToHealth = writtenToHealth
+        self.sportLabel = sportLabel
+        self.intensityRaw = intensityRaw
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
+        date = try c.decodeIfPresent(Date.self, forKey: .date) ?? Date()
+        title = try c.decode(String.self, forKey: .title)
+        kind = try c.decodeIfPresent(SessionKind.self, forKey: .kind) ?? .strength
+        exercises = try c.decodeIfPresent([LoggedExercise].self, forKey: .exercises) ?? []
+        durationSec = try c.decodeIfPresent(Int.self, forKey: .durationSec) ?? 0
+        kcal = try c.decodeIfPresent(Int.self, forKey: .kcal) ?? 0
+        note = try c.decodeIfPresent(String.self, forKey: .note) ?? ""
+        syncedToWatch = try c.decodeIfPresent(Bool.self, forKey: .syncedToWatch) ?? false
+        writtenToHealth = try c.decodeIfPresent(Bool.self, forKey: .writtenToHealth) ?? false
+        sportLabel = try c.decodeIfPresent(String.self, forKey: .sportLabel)
+        intensityRaw = try c.decodeIfPresent(String.self, forKey: .intensityRaw)
+    }
 
     var totalVolume: Double { exercises.reduce(0) { $0 + $1.volume } }
     var totalSets: Int { exercises.reduce(0) { $0 + $1.doneSets.count } }
+
+    var inferredIntensity: WorkoutIntensity {
+        if let intensityRaw, let explicit = WorkoutIntensity(rawValue: intensityRaw) {
+            return explicit
+        }
+        let rpes = exercises.flatMap(\.doneSets).compactMap(\.rpe)
+        if !rpes.isEmpty {
+            let avg = rpes.reduce(0, +) / Double(rpes.count)
+            switch avg {
+            case ..<7.0: return .easy
+            case 7.0..<8.2: return .moderate
+            case 8.2..<9.2: return .hard
+            default: return .maxEffort
+            }
+        }
+        if totalSets >= 18 || durationSec >= 4200 { return .hard }
+        if totalSets >= 10 || durationSec >= 2400 { return .moderate }
+        return .easy
+    }
 }
 
 // MARK: - 饮食
@@ -191,6 +279,44 @@ enum Meal: String, Codable, CaseIterable, Identifiable {
     }
 }
 
+struct FoodTemplateItem: Identifiable, Codable, Hashable {
+    var id = UUID()
+    var name: String
+    var grams: Double
+    var kcal: Double
+    var protein: Double
+    var carbs: Double
+    var fat: Double
+    var fiber: Double = 0
+
+    func toFoodItem() -> FoodItem {
+        FoodItem(name: name, grams: grams, kcal: kcal, protein: protein, carbs: carbs, fat: fat, fiber: fiber)
+    }
+
+    static let defaults: [FoodTemplateItem] = [
+        FoodTemplateItem(name: "草莓味蛋白粉", grams: 30, kcal: 110, protein: 24, carbs: 2, fat: 1),
+        FoodTemplateItem(name: "鸡胸肉套餐", grams: 180, kcal: 297, protein: 56, carbs: 0, fat: 6),
+        FoodTemplateItem(name: "黑咖啡", grams: 300, kcal: 6, protein: 0, carbs: 1, fat: 0)
+    ]
+}
+
+struct CarbCycleConfig: Codable, Hashable {
+    var enabled: Bool = false
+    /// 1 = 周日 ... 7 = 周六（与 Calendar.weekday 一致）
+    var highDays: [Int] = [2, 4, 6]
+    var highCarbG: Int = 280
+    var mediumCarbG: Int = 210
+    var lowCarbG: Int = 130
+
+    func targetGrams(for weekday: Int, fallback: Int) -> Int {
+        guard enabled else { return fallback }
+        if highDays.contains(weekday) { return highCarbG }
+        // 相邻或普通日给低碳，周五等给中碳
+        if weekday == 1 || weekday == 7 { return lowCarbG }
+        return mediumCarbG
+    }
+}
+
 // MARK: - 补剂与咖啡因
 
 struct SupplementItem: Identifiable, Codable, Hashable {
@@ -218,6 +344,36 @@ struct CaffeineEntry: Identifiable, Codable, Hashable {
     var date: Date = Date()
     var title: String
     var mg: Int
+}
+
+// MARK: - 图片库 / 体态拍立得照片
+
+struct PhotoMemory: Identifiable, Codable, Hashable {
+    var id = UUID()
+    var date: Date = Date()
+    var fileName: String
+    var caption: String = ""
+    var categoryRaw: String = "meal" // meal / posture
+}
+
+// MARK: - 跑鞋与跑步隐私区
+
+struct ShoeGear: Identifiable, Codable, Hashable {
+    var id = UUID()
+    var name: String
+    var brand: String
+    var loggedKm: Double = 0
+    var maxKm: Double = 600
+    var isActive: Bool = true
+    var createdAt: Date = Date()
+}
+
+struct PrivacyZone: Identifiable, Codable, Hashable {
+    var id = UUID()
+    var name: String
+    var lat: Double
+    var lon: Double
+    var radiusM: Double = 300
 }
 
 // MARK: - 首页小组件布局
@@ -281,6 +437,67 @@ enum HomeWidgetKind: String, Codable, CaseIterable, Identifiable {
         .caffeine, .foodReceipt,
         .activityRings, .monthlyHours
     ]
+}
+
+// MARK: - 计划模板（本地单次 & 周计划 & 跑步周期）
+
+enum PosterAccent: String, Codable, CaseIterable {
+    case silver, purple, green, blue
+
+    var colors: [Color] {
+        switch self {
+        case .silver: return [.white, Color(hex: 0x8F9199)]
+        case .purple: return [.white, Color(hex: 0xC6B7FF)]
+        case .green:  return [.white, Color(hex: 0x70E896)]
+        case .blue:   return [.white, Color(hex: 0x74C0FF)]
+        }
+    }
+}
+
+struct WorkoutTemplate: Identifiable, Codable, Hashable {
+    var id: String
+    var posterWords: [String]
+    var accentRaw: String
+    var title: String
+    var level: String
+    var estimatedMinutes: Int
+    var categories: [String]
+    var focus: MuscleGroup?
+    var exercises: [PlannedExercise]
+    var isCustom: Bool
+
+    var accent: PosterAccent {
+        PosterAccent(rawValue: accentRaw) ?? .silver
+    }
+}
+
+struct WeekPlanTemplate: Identifiable, Codable, Hashable {
+    var id: String
+    var title: String
+    var subtitle: String
+    /// 1 = 周一 ... 7 = 周日
+    var activeWeekdaysMonFirst: [Int]
+    var level: String
+    var minutesPerSession: Int
+    var isCardioTheme: Bool
+    var categories: [String]
+    var days: [PlannedDay]
+}
+
+struct RunProgramTemplate: Identifiable, Codable, Hashable {
+    var id: String
+    var posterLines: [String]
+    var accentRaw: String
+    var title: String
+    var level: String
+    var weeks: Int
+    var sessionsPerWeek: Int
+    var summary: String
+    var sampleDays: [PlannedDay]
+
+    var accent: PosterAccent {
+        PosterAccent(rawValue: accentRaw) ?? .silver
+    }
 }
 
 // MARK: - 教练
@@ -528,11 +745,12 @@ struct Profile: Codable, Hashable {
     var maxHeartRate: Int
     var injuryAvoidAreas: [String]
     var preferredUnit: String
+    var targetWeightKg: Double
 
     enum CodingKeys: String, CodingKey {
         case nickname, goal, experience, daysPerWeek, heightCm, weightKg
         case age, sexMale, dailyKcalGoal, weeklyWorkoutsGoal
-        case maxHeartRate, injuryAvoidAreas, preferredUnit
+        case maxHeartRate, injuryAvoidAreas, preferredUnit, targetWeightKg
     }
 
     init(
@@ -548,7 +766,8 @@ struct Profile: Codable, Hashable {
         weeklyWorkoutsGoal: Int = 4,
         maxHeartRate: Int = 190,
         injuryAvoidAreas: [String] = [],
-        preferredUnit: String = "kg"
+        preferredUnit: String = "kg",
+        targetWeightKg: Double = 74
     ) {
         self.nickname = nickname
         self.goal = goal
@@ -563,6 +782,7 @@ struct Profile: Codable, Hashable {
         self.maxHeartRate = maxHeartRate
         self.injuryAvoidAreas = injuryAvoidAreas
         self.preferredUnit = preferredUnit
+        self.targetWeightKg = targetWeightKg
     }
 
     init(from decoder: Decoder) throws {
@@ -580,6 +800,7 @@ struct Profile: Codable, Hashable {
         maxHeartRate = try c.decodeIfPresent(Int.self, forKey: .maxHeartRate) ?? 190
         injuryAvoidAreas = try c.decodeIfPresent([String].self, forKey: .injuryAvoidAreas) ?? []
         preferredUnit = try c.decodeIfPresent(String.self, forKey: .preferredUnit) ?? "kg"
+        targetWeightKg = try c.decodeIfPresent(Double.self, forKey: .targetWeightKg) ?? 74
     }
 
     var bmr: Double {
@@ -695,7 +916,7 @@ struct AppState: Codable {
     var planUndo: [PlannedDay]? = nil
     var weekStamp: Int = 0
 
-    // Phase 1 新增状态（全部向后兼容解码）
+    // Phase 1
     var supplements: [SupplementItem] = []
     var supplementLogs: [SupplementLog] = []
     var caffeineEntries: [CaffeineEntry] = []
@@ -705,11 +926,42 @@ struct AppState: Codable {
     var homeWidgets: [HomeWidgetKind] = HomeWidgetKind.defaultOrder
     var hiddenHomeWidgets: [HomeWidgetKind] = []
 
+    // Phase 2: 计划模板、收藏、单日覆写、日历显示配置
+    var customTemplates: [WorkoutTemplate] = []
+    var favoriteTemplateIDs: [String] = []
+    var dayOverrides: [String: PlannedDay] = [:]
+    var planRepeatWeeks: Int = 0
+    var calendarShowEffort: Bool = true
+
+    // Phase 3: 记录图片库、碳循环、常用食物、膳食纤维目标
+    var photoMemories: [PhotoMemory] = []
+    var carbCycle = CarbCycleConfig()
+    var quickFoodTemplates: [FoodTemplateItem] = FoodTemplateItem.defaults
+    var fiberGoalG: Double = 25
+
+    // Phase 4: 跑步装备、隐私区、插件、收藏歌单曲目
+    var installedPluginIDs: [String] = []
+    var shoes: [ShoeGear] = []
+    var privacyZones: [PrivacyZone] = []
+    var runMapStyleRaw: String = "standard"
+    var favoriteMusicIDs: [String] = []
+
+    // Phase 5: 系统设置偏好
+    var hapticModeRaw: String = "necessary" // off / necessary / all
+    var appearanceRaw: String = "dark"      // system / dark / light
+    var languageCode: String = "zh-Hans"
+    var remindersEnabled: Bool = true
+    var showWidgetGuideCard: Bool = true
+
     enum CodingKeys: String, CodingKey {
         case profile, exercises, sessions, foods, runs, chats, snapshots, plan, membership, quotas, seeded
         case waterDays, waterGoalMl, lastWeekPlan, planUndo, weekStamp
         case supplements, supplementLogs, caffeineEntries, caffeineLimitMg
         case sleepTargetHour, sleepTargetMinute, homeWidgets, hiddenHomeWidgets
+        case customTemplates, favoriteTemplateIDs, dayOverrides, planRepeatWeeks, calendarShowEffort
+        case photoMemories, carbCycle, quickFoodTemplates, fiberGoalG
+        case installedPluginIDs, shoes, privacyZones, runMapStyleRaw, favoriteMusicIDs
+        case hapticModeRaw, appearanceRaw, languageCode, remindersEnabled, showWidgetGuideCard
     }
 
     init() {}
@@ -742,6 +994,29 @@ struct AppState: Codable {
         let savedWidgets = try c.decodeIfPresent([HomeWidgetKind].self, forKey: .homeWidgets) ?? HomeWidgetKind.defaultOrder
         homeWidgets = savedWidgets.isEmpty ? HomeWidgetKind.defaultOrder : savedWidgets
         hiddenHomeWidgets = try c.decodeIfPresent([HomeWidgetKind].self, forKey: .hiddenHomeWidgets) ?? []
+
+        customTemplates = try c.decodeIfPresent([WorkoutTemplate].self, forKey: .customTemplates) ?? []
+        favoriteTemplateIDs = try c.decodeIfPresent([String].self, forKey: .favoriteTemplateIDs) ?? []
+        dayOverrides = try c.decodeIfPresent([String: PlannedDay].self, forKey: .dayOverrides) ?? [:]
+        planRepeatWeeks = try c.decodeIfPresent(Int.self, forKey: .planRepeatWeeks) ?? 0
+        calendarShowEffort = try c.decodeIfPresent(Bool.self, forKey: .calendarShowEffort) ?? true
+
+        photoMemories = try c.decodeIfPresent([PhotoMemory].self, forKey: .photoMemories) ?? []
+        carbCycle = try c.decodeIfPresent(CarbCycleConfig.self, forKey: .carbCycle) ?? CarbCycleConfig()
+        quickFoodTemplates = try c.decodeIfPresent([FoodTemplateItem].self, forKey: .quickFoodTemplates) ?? FoodTemplateItem.defaults
+        fiberGoalG = try c.decodeIfPresent(Double.self, forKey: .fiberGoalG) ?? 25
+
+        installedPluginIDs = try c.decodeIfPresent([String].self, forKey: .installedPluginIDs) ?? []
+        shoes = try c.decodeIfPresent([ShoeGear].self, forKey: .shoes) ?? []
+        privacyZones = try c.decodeIfPresent([PrivacyZone].self, forKey: .privacyZones) ?? []
+        runMapStyleRaw = try c.decodeIfPresent(String.self, forKey: .runMapStyleRaw) ?? "standard"
+        favoriteMusicIDs = try c.decodeIfPresent([String].self, forKey: .favoriteMusicIDs) ?? []
+
+        hapticModeRaw = try c.decodeIfPresent(String.self, forKey: .hapticModeRaw) ?? "necessary"
+        appearanceRaw = try c.decodeIfPresent(String.self, forKey: .appearanceRaw) ?? "dark"
+        languageCode = try c.decodeIfPresent(String.self, forKey: .languageCode) ?? "zh-Hans"
+        remindersEnabled = try c.decodeIfPresent(Bool.self, forKey: .remindersEnabled) ?? true
+        showWidgetGuideCard = try c.decodeIfPresent(Bool.self, forKey: .showWidgetGuideCard) ?? true
     }
 
     func encode(to encoder: Encoder) throws {
@@ -771,5 +1046,28 @@ struct AppState: Codable {
         try c.encode(sleepTargetMinute, forKey: .sleepTargetMinute)
         try c.encode(homeWidgets, forKey: .homeWidgets)
         try c.encode(hiddenHomeWidgets, forKey: .hiddenHomeWidgets)
+
+        try c.encode(customTemplates, forKey: .customTemplates)
+        try c.encode(favoriteTemplateIDs, forKey: .favoriteTemplateIDs)
+        try c.encode(dayOverrides, forKey: .dayOverrides)
+        try c.encode(planRepeatWeeks, forKey: .planRepeatWeeks)
+        try c.encode(calendarShowEffort, forKey: .calendarShowEffort)
+
+        try c.encode(photoMemories, forKey: .photoMemories)
+        try c.encode(carbCycle, forKey: .carbCycle)
+        try c.encode(quickFoodTemplates, forKey: .quickFoodTemplates)
+        try c.encode(fiberGoalG, forKey: .fiberGoalG)
+
+        try c.encode(installedPluginIDs, forKey: .installedPluginIDs)
+        try c.encode(shoes, forKey: .shoes)
+        try c.encode(privacyZones, forKey: .privacyZones)
+        try c.encode(runMapStyleRaw, forKey: .runMapStyleRaw)
+        try c.encode(favoriteMusicIDs, forKey: .favoriteMusicIDs)
+
+        try c.encode(hapticModeRaw, forKey: .hapticModeRaw)
+        try c.encode(appearanceRaw, forKey: .appearanceRaw)
+        try c.encode(languageCode, forKey: .languageCode)
+        try c.encode(remindersEnabled, forKey: .remindersEnabled)
+        try c.encode(showWidgetGuideCard, forKey: .showWidgetGuideCard)
     }
 }

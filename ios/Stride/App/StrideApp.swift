@@ -25,7 +25,7 @@ struct StrideApp: App {
                 .environmentObject(ai)
                 .environmentObject(health)
                 .environmentObject(watch)
-                .preferredColorScheme(.dark)
+                .preferredColorScheme(store.preferredColorSchemeOverride ?? .dark)
                 .tint(Palette.green)
                 .task {
                     if LaunchFlags.simulateWatch {

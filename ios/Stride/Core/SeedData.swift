@@ -253,7 +253,11 @@ enum SeedData {
                     activeKcal: v.1,
                     exerciseMin: v.2,
                     restingHR: 52 + (i % 5),
-                    weightKg: 76.0 - Double(i) * 0.05
+                    weightKg: 76.0 - Double(i) * 0.05,
+                    sleepMinutes: 405 + (i % 4) * 35,
+                    standHours: i == 0 ? 6 : (10 + (i % 3)),
+                    flightsClimbed: 12 + (i % 7) * 2,
+                    hrvMs: 44 + (i % 6) * 3
                 )
             )
         }

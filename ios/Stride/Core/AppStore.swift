@@ -1,6 +1,7 @@
 import Foundation
 import SwiftUI
 import Combine
+import UIKit
 
 @MainActor
 final class AppStore: ObservableObject {
@@ -205,24 +206,42 @@ final class AppStore: ObservableObject {
     }
 
     var todayNutrition: (kcal: Double, p: Double, c: Double, f: Double) {
-        let today = state.foods.filter { calendar.isDateInToday($0.date) }
+        nutrition(on: Date())
+    }
+
+    func nutrition(on date: Date) -> (kcal: Double, p: Double, c: Double, f: Double) {
+        let dayFoods = foods(on: date)
         return (
-            today.reduce(0) { $0 + $1.kcal },
-            today.reduce(0) { $0 + $1.protein },
-            today.reduce(0) { $0 + $1.carbs },
-            today.reduce(0) { $0 + $1.fat }
+            dayFoods.reduce(0) { $0 + $1.kcal },
+            dayFoods.reduce(0) { $0 + $1.protein },
+            dayFoods.reduce(0) { $0 + $1.carbs },
+            dayFoods.reduce(0) { $0 + $1.fat }
         )
     }
 
-    var todayFoods: [FoodEntry] {
+    func fiber(on date: Date) -> Double {
+        foods(on: date).reduce(0) { $0 + $1.fiber }
+    }
+
+    func foods(on date: Date) -> [FoodEntry] {
         state.foods
-            .filter { calendar.isDateInToday($0.date) }
+            .filter { calendar.isDate($0.date, inSameDayAs: date) }
             .sorted { $0.date < $1.date }
+    }
+
+    var todayFoods: [FoodEntry] {
+        foods(on: Date())
     }
 
     /// 今日剩余可摄入热量（目标 - 已吃）
     var remainingKcalToday: Int {
         state.profile.kcalTarget - Int(todayNutrition.kcal.rounded())
+    }
+
+    func carbTarget(on date: Date) -> Int {
+        let base = max(120, Int((Double(state.profile.kcalTarget) * 0.42 / 4.0).rounded()))
+        let weekday = calendar.component(.weekday, from: date)
+        return state.carbCycle.targetGrams(for: weekday, fallback: base)
     }
 
     var todaySnapshot: DailySnapshot {
@@ -298,6 +317,7 @@ final class AppStore: ObservableObject {
                 )
             )
         }
+        triggerHaptic(.success)
     }
 
     func deleteSession(id: UUID) {
@@ -306,6 +326,7 @@ final class AppStore: ObservableObject {
 
     func addFood(_ entry: FoodEntry) {
         state.foods.insert(entry, at: 0)
+        triggerHaptic(.light)
     }
 
     func deleteFood(id: UUID) {
@@ -314,6 +335,22 @@ final class AppStore: ObservableObject {
 
     func addRun(_ run: RouteRun) {
         state.runs.insert(run, at: 0)
+        // 为当前激活中的第一双跑鞋自动累加里程
+        if let idx = state.shoes.firstIndex(where: \.isActive) {
+            state.shoes[idx].loggedKm += run.distanceM / 1000.0
+        }
+        triggerHaptic(.success)
+    }
+
+    func recordWeight(_ kg: Double, on date: Date = Date()) {
+        let clamped = min(max(kg, Backup.validWeightKg.lowerBound), Backup.validWeightKg.upperBound)
+        state.profile.weightKg = clamped
+        if let idx = state.snapshots.firstIndex(where: { calendar.isDate($0.date, inSameDayAs: date) }) {
+            state.snapshots[idx].weightKg = clamped
+        } else {
+            state.snapshots.append(DailySnapshot(date: date, weightKg: clamped))
+        }
+        triggerHaptic(.light)
     }
 
     // MARK: - 饮水
@@ -331,6 +368,7 @@ final class AppStore: ObservableObject {
         } else {
             state.waterDays.append(WaterDay(day: key, ml: next))
         }
+        triggerHaptic(.light)
     }
 
     // MARK: - 补剂管理
@@ -364,6 +402,7 @@ final class AppStore: ObservableObject {
         } else {
             state.supplementLogs.append(SupplementLog(day: key, itemIDs: [id]))
         }
+        triggerHaptic(.light)
     }
 
     func takeAllSupplementsToday(on date: Date = Date()) {
@@ -374,6 +413,7 @@ final class AppStore: ObservableObject {
         } else {
             state.supplementLogs.append(SupplementLog(day: key, itemIDs: allIDs))
         }
+        triggerHaptic(.success)
     }
 
     // MARK: - 咖啡因管理
@@ -391,6 +431,7 @@ final class AppStore: ObservableObject {
     func addCaffeine(title: String, mg: Int, at date: Date = Date()) {
         guard mg > 0 else { return }
         state.caffeineEntries.insert(CaffeineEntry(date: date, title: title, mg: mg), at: 0)
+        triggerHaptic(.light)
     }
 
     func deleteCaffeine(id: UUID) {
@@ -402,7 +443,6 @@ final class AppStore: ObservableObject {
     var visibleHomeWidgets: [HomeWidgetKind] {
         let hidden = Set(state.hiddenHomeWidgets)
         var ordered = state.homeWidgets.filter { !hidden.contains($0) }
-        // 自动补入未出现在配置列表中的新增组件类型
         for kind in HomeWidgetKind.defaultOrder where !state.homeWidgets.contains(kind) && !hidden.contains(kind) {
             ordered.append(kind)
         }
@@ -441,7 +481,7 @@ final class AppStore: ObservableObject {
         state.hiddenHomeWidgets = []
     }
 
-    // MARK: - 本周计划
+    // MARK: - 本周计划 & 模板管理
 
     func rollWeekIfNeeded(now: Date, calendar: Calendar? = nil) {
         let cal = calendar ?? self.calendar
@@ -494,6 +534,12 @@ final class AppStore: ObservableObject {
         state = next
     }
 
+    func clearAllPlanAndOverrides() {
+        clearThisWeek()
+        state.dayOverrides = [:]
+        state.planRepeatWeeks = 0
+    }
+
     @discardableResult
     func restoreWeek() -> Bool {
         guard let undo = state.planUndo, var plan = state.plan else { return false }
@@ -503,6 +549,224 @@ final class AppStore: ObservableObject {
         next.planUndo = nil
         state = next
         return true
+    }
+
+    func plannedDay(on date: Date) -> PlannedDay? {
+        let key = WaterLog.dayKey(date, calendar: calendar)
+        if let override = state.dayOverrides[key] {
+            return override
+        }
+        let weekday = calendar.component(.weekday, from: date)
+        return state.plan?.days.first { $0.weekday == weekday }
+    }
+
+    func hasDayOverride(on date: Date) -> Bool {
+        let key = WaterLog.dayKey(date, calendar: calendar)
+        return state.dayOverrides[key] != nil
+    }
+
+    func setDayOverride(_ day: PlannedDay, on date: Date) {
+        let key = WaterLog.dayKey(date, calendar: calendar)
+        var copy = day
+        copy.weekday = calendar.component(.weekday, from: date)
+        state.dayOverrides[key] = copy
+    }
+
+    func clearDayOverride(on date: Date) {
+        let key = WaterLog.dayKey(date, calendar: calendar)
+        state.dayOverrides.removeValue(forKey: key)
+    }
+
+    func applyWeekTemplate(_ template: WeekPlanTemplate) {
+        if var plan = state.plan {
+            state.planUndo = plan.days
+            plan.days = template.days
+            plan.generatedBy = template.title
+            state.plan = plan
+        } else {
+            state.plan = TrainingPlan(
+                goal: state.profile.goal,
+                weeks: 4,
+                days: template.days,
+                generatedBy: template.title
+            )
+        }
+        triggerHaptic(.success)
+    }
+
+    func applyTemplateToDay(_ template: WorkoutTemplate, on date: Date) {
+        let weekday = calendar.component(.weekday, from: date)
+        let planned = PlannedDay(
+            weekday: weekday,
+            title: template.title,
+            focus: template.focus,
+            exercises: template.exercises,
+            rest: false
+        )
+        setDayOverride(planned, on: date)
+        triggerHaptic(.success)
+    }
+
+    func addCustomTemplate(_ template: WorkoutTemplate) {
+        state.customTemplates.insert(template, at: 0)
+        triggerHaptic(.success)
+    }
+
+    func deleteCustomTemplate(id: String) {
+        state.customTemplates.removeAll { $0.id == id }
+        state.favoriteTemplateIDs.removeAll { $0 == id }
+    }
+
+    func isTemplateFavorite(_ id: String) -> Bool {
+        state.favoriteTemplateIDs.contains(id)
+    }
+
+    func toggleTemplateFavorite(_ id: String) {
+        if let idx = state.favoriteTemplateIDs.firstIndex(of: id) {
+            state.favoriteTemplateIDs.remove(at: idx)
+        } else {
+            state.favoriteTemplateIDs.append(id)
+        }
+        triggerHaptic(.light)
+    }
+
+    // MARK: - 图片库本地照片管理
+
+    var photosDirectoryURL: URL {
+        let dir = fileURL.deletingLastPathComponent().appendingPathComponent("photos", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir
+    }
+
+    func savePhotoMemory(image: UIImage, caption: String = "", category: String = "meal") {
+        let fileName = "\(UUID().uuidString).jpg"
+        let dest = photosDirectoryURL.appendingPathComponent(fileName)
+        if let data = image.jpegData(compressionQuality: 0.78) {
+            try? data.write(to: dest, options: .atomic)
+            state.photoMemories.insert(
+                PhotoMemory(date: Date(), fileName: fileName, caption: caption, categoryRaw: category),
+                at: 0
+            )
+            triggerHaptic(.light)
+        }
+    }
+
+    func loadPhotoImage(fileName: String) -> UIImage? {
+        let url = photosDirectoryURL.appendingPathComponent(fileName)
+        guard let data = try? Data(contentsOf: url) else { return nil }
+        return UIImage(data: data)
+    }
+
+    func deletePhotoMemory(id: UUID) {
+        if let item = state.photoMemories.first(where: { $0.id == id }) {
+            let url = photosDirectoryURL.appendingPathComponent(item.fileName)
+            try? FileManager.default.removeItem(at: url)
+        }
+        state.photoMemories.removeAll { $0.id == id }
+    }
+
+    func clearPhotoCache() -> Int64 {
+        let dir = photosDirectoryURL
+        let bytes = localStorageBytes(in: dir)
+        try? FileManager.default.removeItem(at: dir)
+        state.photoMemories = []
+        return bytes
+    }
+
+    func localStorageBytes(in folder: URL? = nil) -> Int64 {
+        let root = folder ?? fileURL.deletingLastPathComponent()
+        guard let enumerator = FileManager.default.enumerator(at: root, includingPropertiesForKeys: [.fileSizeKey]) else {
+            return 0
+        }
+        var total: Int64 = 0
+        for case let url as URL in enumerator {
+            if let size = (try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize) {
+                total += Int64(size)
+            }
+        }
+        return total
+    }
+
+    // MARK: - 插件、跑鞋、隐私区、音乐收藏
+
+    func isPluginInstalled(_ id: String) -> Bool {
+        state.installedPluginIDs.contains(id)
+    }
+
+    func togglePluginInstalled(_ id: String) {
+        if let idx = state.installedPluginIDs.firstIndex(of: id) {
+            state.installedPluginIDs.remove(at: idx)
+        } else {
+            state.installedPluginIDs.append(id)
+        }
+        triggerHaptic(.light)
+    }
+
+    func markPluginInstalled(_ id: String) {
+        if !state.installedPluginIDs.contains(id) {
+            state.installedPluginIDs.append(id)
+        }
+    }
+
+    func addShoe(name: String, brand: String, maxKm: Double = 600) {
+        state.shoes.insert(ShoeGear(name: name, brand: brand, loggedKm: 0, maxKm: maxKm, isActive: true), at: 0)
+        triggerHaptic(.light)
+    }
+
+    func deleteShoe(id: UUID) {
+        state.shoes.removeAll { $0.id == id }
+    }
+
+    func addPrivacyZone(name: String, lat: Double, lon: Double, radiusM: Double = 300) {
+        state.privacyZones.append(PrivacyZone(name: name, lat: lat, lon: lon, radiusM: radiusM))
+    }
+
+    func removePrivacyZone(id: UUID) {
+        state.privacyZones.removeAll { $0.id == id }
+    }
+
+    func isMusicFavorite(_ id: String) -> Bool {
+        state.favoriteMusicIDs.contains(id)
+    }
+
+    func toggleMusicFavorite(_ id: String) {
+        if let idx = state.favoriteMusicIDs.firstIndex(of: id) {
+            state.favoriteMusicIDs.remove(at: idx)
+        } else {
+            state.favoriteMusicIDs.append(id)
+        }
+        triggerHaptic(.light)
+    }
+
+    // MARK: - 触感与全局显示辅助
+
+    enum HapticKind { case light, success }
+
+    func triggerHaptic(_ kind: HapticKind) {
+        guard state.hapticModeRaw != "off" else { return }
+        if state.hapticModeRaw == "necessary" && kind == .light { return }
+        switch kind {
+        case .light:
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        case .success:
+            UINotificationFeedbackGenerator().notificationOccurred(.success)
+        }
+    }
+
+    var preferredColorSchemeOverride: ColorScheme? {
+        switch state.appearanceRaw {
+        case "light": return .light
+        case "dark": return .dark
+        default: return nil
+        }
+    }
+
+    func formatWeight(_ kg: Double) -> String {
+        if state.profile.preferredUnit == "lb" {
+            let lb = kg * 2.20462
+            return String(format: "%.1f lb", lb)
+        }
+        return kg == kg.rounded() ? "\(Int(kg)) kg" : String(format: "%.1f kg", kg)
     }
 
     func updateRun(_ run: RouteRun) {
@@ -531,9 +795,10 @@ final class AppStore: ObservableObject {
     // MARK: - 今天的训练建议
 
     var todaysPlannedDay: PlannedDay? {
-        guard let plan = state.plan else { return nil }
-        let weekday = calendar.component(.weekday, from: Date())
-        return plan.days.first { $0.weekday == weekday && !$0.rest }
+        if let day = plannedDay(on: Date()), !day.rest {
+            return day
+        }
+        return nil
     }
 
     func exercise(named name: String) -> Exercise? {

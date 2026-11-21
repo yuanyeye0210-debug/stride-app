@@ -19,6 +19,9 @@ enum CoachEngine {
         var lines: [String] = []
         let body = String(format: "%.0fcm / %.1fkg", p.heightCm, p.weightKg)
         lines.append("用户：\(p.nickname)，\(p.age) 岁，\(body)，目标 \(p.goal.rawValue)，经验 \(p.experience.rawValue)，每周 \(p.daysPerWeek) 练。")
+        if !p.injuryAvoidAreas.isEmpty {
+            lines.append("伤病规避区域：\(p.injuryAvoidAreas.joined(separator: "、"))（给建议时需主动避开对这些部位压力过大的动作）。")
+        }
 
         let recent = store.recentSessions.prefix(4)
         if recent.isEmpty {

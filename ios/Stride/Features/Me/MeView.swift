@@ -33,37 +33,86 @@ struct MeView: View {
     @State private var showRestoreDialog = false
     @State private var restoreCandidates: [URL] = []
 
+    @State private var showSettingsSheet = false
+    @State private var showProfileEdit = false
+    @State private var showCoachSheet = false
+    @State private var showInjurySheet = false
+    @State private var showHeartRateSheet = false
+    @State private var showWidgetGuideSheet = false
+    @State private var showBrandAlert = false
+
     private var profile: Profile { store.state.profile }
 
-    /// 版本号从 Bundle 读，构建脚本注入，不再写死
     private var appVersion: String {
         let info = Bundle.main.infoDictionary
-        let short = info?["CFBundleShortVersionString"] as? String ?? "1.0"
+        let short = info?["CFBundleShortVersionString"] as? String ?? "1.1"
         let build = info?["CFBundleVersion"] as? String ?? "1"
         return "\(short) (\(build))"
     }
 
     var body: some View {
-        ZStack {
-            ScreenBackground()
+        ZStack(alignment: .top) {
+            Palette.bg.ignoresSafeArea()
 
             ScrollView(showsIndicators: false) {
-                VStack(spacing: 14) {
-                    profileCard
-                    statsRow
-                    accountSection
-                    toolSection
+                VStack(spacing: 16) {
+                    avatarHeader
+
+                    if store.state.showWidgetGuideCard {
+                        widgetGuideCard
+                    }
+
+                    // Stride Intelligence 炫彩入口
+                    intelligenceCard
+
+                    // 提醒 & 设备
+                    deviceAndReminderSection
+
+                    // 数据与动作（趋势数据 / 训练负荷 / 动作库）
+                    analyticsAndLibrarySection
+
+                    // 个人体能档案（心率区间 / 经验 / 目标 / 伤病规避 / 训练重量 / 数据同步）
+                    trainingProfileSection
+
+                    // v1.2 数据备份与安全隔离提示（完整保留）
                     backupSection
+
+                    // 关于与工具
                     aboutSection
                 }
                 .padding(.horizontal, Metrics.page)
+                .padding(.top, 56)
                 .padding(.bottom, Metrics.floatingTabBottomInset + 16)
             }
+
+            // 顶部左右悬浮液态玻璃控件（图 78）
+            topFloatingControls
         }
-        .navigationTitle("自己")
-        .navigationBarTitleDisplayMode(.large)
-        .toolbarBackground(Palette.bg, for: .navigationBar)
+        .toolbar(.hidden, for: .navigationBar)
         .toast($toast)
+        .fullScreenCover(isPresented: $showSettingsSheet) {
+            SettingsView()
+        }
+        .navigationDestination(isPresented: $showProfileEdit) {
+            ProfileEditView()
+        }
+        .sheet(isPresented: $showCoachSheet) {
+            NavigationStack { CoachView() }
+        }
+        .sheet(isPresented: $showInjurySheet) {
+            InjuryAvoidEditorSheet()
+        }
+        .sheet(isPresented: $showHeartRateSheet) {
+            MaxHeartRateEditorSheet()
+        }
+        .sheet(isPresented: $showWidgetGuideSheet) {
+            HomeWidgetManagerSheet()
+        }
+        .alert("\(Brand.nameZH) · \(Brand.name)", isPresented: $showBrandAlert) {
+            Button("好的", role: .cancel) {}
+        } message: {
+            Text("当前版本 \(appVersion)\n全功能已开放，所有记录仅存于本机。")
+        }
         .fileExporter(
             isPresented: $showExporter,
             document: exportDocument,
@@ -110,7 +159,300 @@ struct MeView: View {
         }
     }
 
-    // MARK: - 数据备份
+    // MARK: - 顶部左右液态玻璃悬浮操作栏
+
+    private var topFloatingControls: some View {
+        HStack {
+            Button {
+                showBrandAlert = true
+            } label: {
+                Text("STRIDE")
+                    .font(.system(size: 10, weight: .black, design: .rounded))
+                    .foregroundStyle(Palette.text)
+                    .frame(width: 46, height: 38)
+                    .liquidGlassCapsule(tint: Color.black.opacity(0.45))
+            }
+            .buttonStyle(.plain)
+
+            Spacer()
+
+            HStack(spacing: 14) {
+                Button {
+                    showProfileEdit = true
+                } label: {
+                    Image(systemName: "pencil")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(Palette.text)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("编辑资料")
+
+                Button {
+                    showSettingsSheet = true
+                } label: {
+                    Image(systemName: "gearshape")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(Palette.text)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("设置")
+            }
+            .padding(.horizontal, 14)
+            .frame(height: 38)
+            .liquidGlassCapsule(tint: Color.black.opacity(0.45))
+        }
+        .padding(.horizontal, Metrics.page)
+        .padding(.top, 6)
+    }
+
+    // MARK: - 居中头像与昵称
+
+    private var avatarHeader: some View {
+        VStack(spacing: 10) {
+            Button {
+                showProfileEdit = true
+            } label: {
+                Circle()
+                    .fill(Color.white)
+                    .frame(width: 96, height: 96)
+                    .overlay {
+                        Image(systemName: "person.fill")
+                            .font(.system(size: 48))
+                            .foregroundStyle(Color(hex: 0xD1D1D6))
+                    }
+                    .shadow(color: .black.opacity(0.4), radius: 12, y: 4)
+            }
+            .buttonStyle(.plain)
+
+            Text(profile.nickname)
+                .font(.system(size: 24, weight: .bold))
+                .foregroundStyle(Palette.text)
+
+            Text("\(profile.goal.rawValue) · 每周 \(profile.daysPerWeek) 练 · \(store.state.sessions.count) 次记录")
+                .font(.system(size: 12.5))
+                .foregroundStyle(Palette.textDim)
+        }
+        .padding(.top, 4)
+    }
+
+    // MARK: - 添加小组件引导卡（图 78）
+
+    private var widgetGuideCard: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: "square.grid.2x2")
+                .font(.system(size: 24, weight: .medium))
+                .foregroundStyle(Palette.blue)
+                .padding(.top, 2)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text("自定义首页看板小组件")
+                    .font(.system(size: 15, weight: .bold))
+                    .foregroundStyle(Palette.text)
+                Text("把饮水、肌肉恢复、咖啡因代谢和饮食小票排成你的专属首页。")
+                    .font(.system(size: 12.5))
+                    .foregroundStyle(Palette.textDim)
+                Button("立即开始") {
+                    showWidgetGuideSheet = true
+                }
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(Palette.blue)
+                .padding(.top, 2)
+            }
+
+            Spacer(minLength: 4)
+
+            Button {
+                withAnimation { store.state.showWidgetGuideCard = false }
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Palette.textFaint)
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(16)
+        .card(radius: 22, fill: Palette.card, stroke: Palette.stroke)
+    }
+
+    // MARK: - Stride Intelligence 炫彩声波入口（图 79）
+
+    private var intelligenceCard: some View {
+        VStack(spacing: 0) {
+            Button {
+                showCoachSheet = true
+            } label: {
+                HStack(spacing: 12) {
+                    Image(systemName: "waveform")
+                        .font(.system(size: 18, weight: .bold))
+                        .foregroundStyle(
+                            LinearGradient(colors: [Palette.amber, Palette.coralHi, Palette.purple], startPoint: .leading, endPoint: .trailing)
+                        )
+                        .frame(width: 30)
+
+                    Text(Brand.intelligenceName)
+                        .font(.system(size: 15.5, weight: .bold))
+                        .foregroundStyle(
+                            LinearGradient(colors: [Palette.coralHi, Palette.purple, Palette.blue], startPoint: .leading, endPoint: .trailing)
+                        )
+
+                    Spacer()
+
+                    Text(ai.isConfigured ? ai.config.chatModel : "本地教练")
+                        .font(.system(size: 11.5))
+                        .foregroundStyle(Palette.textDim)
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(Palette.textFaint)
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 15)
+            }
+            .buttonStyle(.plain)
+
+            divider
+
+            NavigationLink {
+                AISettingsView()
+            } label: {
+                SettingRow(
+                    icon: "slider.horizontal.3",
+                    title: "AI 服务接口与 Key",
+                    value: ai.isConfigured ? "已配置" : "未配置",
+                    tint: Palette.purple
+                )
+            }
+            .buttonStyle(.plain)
+        }
+        .card(radius: 22, fill: Palette.card, stroke: Palette.stroke)
+    }
+
+    // MARK: - 设备与提醒（图 78）
+
+    private var deviceAndReminderSection: some View {
+        VStack(spacing: 0) {
+            Button {
+                watch.activate()
+                toast = watch.supported ? "手表桥接已启动" : "这台设备不支持 Watch 连接"
+            } label: {
+                SettingRow(
+                    icon: "applewatch",
+                    title: "Apple Watch",
+                    value: watch.reachable ? "● 已连接" : (watch.supported ? "已配对未连接" : "不可用"),
+                    tint: Palette.green
+                )
+            }
+            .buttonStyle(.plain)
+
+            divider
+
+            NavigationLink {
+                PlaylistImportView()
+            } label: {
+                SettingRow(icon: "music.note.list", title: "歌单链接导入", value: "解析 BPM", tint: Palette.pink)
+            }
+            .buttonStyle(.plain)
+
+            divider
+
+            NavigationLink {
+                LyricsView()
+            } label: {
+                SettingRow(icon: "text.alignleft", title: "LRC 歌词同步", value: "不限次数", tint: Palette.blue)
+            }
+            .buttonStyle(.plain)
+        }
+        .card(radius: 22, fill: Palette.card, stroke: Palette.stroke)
+    }
+
+    // MARK: - 趋势数据 / 训练负荷 / 动作库（图 79）
+
+    private var analyticsAndLibrarySection: some View {
+        VStack(spacing: 0) {
+            NavigationLink {
+                TrainingAndRoutesDetailView()
+            } label: {
+                SettingRow(icon: "chart.bar.xaxis", title: "趋势数据", value: "\(store.state.sessions.count) 练", tint: Palette.text)
+            }
+            .buttonStyle(.plain)
+
+            divider
+
+            NavigationLink {
+                RepCounterView()
+            } label: {
+                SettingRow(icon: "figure.strengthtraining.functional", title: "视觉动作计数", value: "相机", tint: Palette.lime)
+            }
+            .buttonStyle(.plain)
+
+            divider
+
+            NavigationLink {
+                ExerciseLibraryView { _ in }
+            } label: {
+                SettingRow(icon: "books.vertical", title: "动作库", value: "\(store.state.exercises.count) 个动作", tint: Palette.text)
+            }
+            .buttonStyle(.plain)
+        }
+        .card(radius: 22, fill: Palette.card, stroke: Palette.stroke)
+    }
+
+    // MARK: - 个人体能档案（图 79–80）
+
+    private var trainingProfileSection: some View {
+        let injuryText = profile.injuryAvoidAreas.isEmpty ? "无" : profile.injuryAvoidAreas.joined(separator: "、")
+        let benchPR = store.personalBest(for: "杠铃卧推")
+        let weightText = benchPR > 0 ? "卧推 \(Int(benchPR))kg" : "未设置"
+
+        return VStack(spacing: 0) {
+            Button { showHeartRateSheet = true } label: {
+                SettingRow(icon: "heart.text.square", title: "心率区间", value: "\(profile.maxHeartRate) bpm", tint: Palette.coralHi)
+            }
+            .buttonStyle(.plain)
+
+            divider
+
+            NavigationLink { ProfileEditView() } label: {
+                SettingRow(icon: "chart.line.uptrend.xyaxis", title: "健身经验", value: profile.experience.rawValue, tint: Palette.text)
+            }
+            .buttonStyle(.plain)
+
+            divider
+
+            NavigationLink { ProfileEditView() } label: {
+                SettingRow(icon: "target", title: "健身目标", value: profile.goal.rawValue, tint: Palette.text)
+            }
+            .buttonStyle(.plain)
+
+            divider
+
+            Button { showInjurySheet = true } label: {
+                SettingRow(icon: "bandage", title: "受伤区域与避免区域", value: injuryText, tint: Palette.amber)
+            }
+            .buttonStyle(.plain)
+
+            divider
+
+            NavigationLink { TrainingAndRoutesDetailView() } label: {
+                SettingRow(icon: "dumbbell", title: "训练重量参考", value: weightText, tint: Palette.text)
+            }
+            .buttonStyle(.plain)
+
+            divider
+
+            Button { syncHealth() } label: {
+                SettingRow(
+                    icon: "heart.fill",
+                    title: "数据同步",
+                    value: syncing ? "同步中…" : (health.authorized ? "Apple 健康 · 已授权" : "Apple 健康"),
+                    tint: Palette.red
+                )
+            }
+            .buttonStyle(.plain)
+        }
+        .card(radius: 22, fill: Palette.card, stroke: Palette.stroke)
+    }
+
+    // MARK: - v1.2 数据备份与损坏隔离提示
 
     private var dataIssueMessage: String? {
         switch store.dataIssue {
@@ -139,9 +481,7 @@ struct MeView: View {
                         .foregroundStyle(Palette.textDim)
                         .fixedSize(horizontal: false, vertical: true)
                     Spacer(minLength: 4)
-                    Button {
-                        store.dataIssue = nil
-                    } label: {
+                    Button { store.dataIssue = nil } label: {
                         Image(systemName: "xmark")
                             .font(.system(size: 11, weight: .bold))
                             .foregroundStyle(Palette.textFaint)
@@ -168,16 +508,13 @@ struct MeView: View {
 
             divider
 
-            Button {
-                showImporter = true
-            } label: {
+            Button { showImporter = true } label: {
                 SettingRow(icon: "square.and.arrow.down", title: "导入备份", value: "JSON", tint: Palette.green)
             }
             .buttonStyle(.plain)
 
             if !autoBackups.isEmpty {
                 divider
-
                 Button {
                     restoreCandidates = autoBackups
                     showRestoreDialog = true
@@ -186,170 +523,6 @@ struct MeView: View {
                 }
                 .buttonStyle(.plain)
             }
-        }
-        .card(radius: 22, fill: Palette.card, stroke: Palette.stroke)
-    }
-
-    private func restoreDisplayName(_ url: URL) -> String {
-        url.deletingPathExtension().lastPathComponent
-            .replacingOccurrences(of: "state.backup-before-import-", with: "")
-    }
-
-    private func restoreBackup(_ url: URL) {
-        do {
-            try store.importData(Data(contentsOf: url))
-            toast = "已恢复备份"
-        } catch {
-            toast = error.localizedDescription
-        }
-    }
-
-    private func doImport() {
-        guard let data = pendingImportData else { return }
-        pendingImportData = nil
-        do {
-            try store.importData(data)
-            toast = "备份已导入"
-        } catch {
-            toast = error.localizedDescription
-        }
-    }
-
-    // MARK: - 资料
-
-    private var profileCard: some View {
-        NavigationLink {
-            ProfileEditView()
-        } label: {
-            HStack(spacing: 14) {
-                ZStack {
-                    Circle()
-                        .fill(LinearGradient(colors: [Palette.green.opacity(0.35), Palette.blue.opacity(0.25)], startPoint: .topLeading, endPoint: .bottomTrailing))
-                        .frame(width: 62, height: 62)
-                    Text(String(profile.nickname.prefix(1)).uppercased())
-                        .font(.system(size: 24, weight: .heavy))
-                        .foregroundStyle(Palette.text)
-                }
-
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(profile.nickname)
-                        .font(.system(size: 20, weight: .bold))
-                        .foregroundStyle(Palette.text)
-                    Text("\(profile.goal.rawValue) · 每周 \(profile.daysPerWeek) 练 · \(profile.experience.rawValue)")
-                        .font(.system(size: 12))
-                        .foregroundStyle(Palette.textDim)
-                }
-                Spacer()
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(Palette.textFaint)
-            }
-            .padding(16)
-            .card(radius: 24, fill: Palette.card, stroke: Palette.stroke)
-        }
-        .buttonStyle(.plain)
-    }
-
-    private var statsRow: some View {
-        HStack(spacing: 10) {
-            StatTile(value: "\(store.state.sessions.count)", label: "训练")
-            StatTile(value: "\(store.streak)", label: "连续")
-            StatTile(value: "\(store.state.runs.count)", label: "轨迹")
-        }
-    }
-
-    // MARK: - 账户 / 连接
-
-    private var accountSection: some View {
-        VStack(spacing: 0) {
-            NavigationLink {
-                AISettingsView()
-            } label: {
-                SettingRow(
-                    icon: "sparkles",
-                    title: "AI 服务",
-                    value: ai.isConfigured ? ai.config.chatModel : "未配置",
-                    tint: Palette.purple
-                )
-            }
-            .buttonStyle(.plain)
-
-            divider
-
-            Button {
-                syncHealth()
-            } label: {
-                SettingRow(
-                    icon: "heart.fill",
-                    title: "Apple 健康",
-                    value: syncing ? "同步中…" : (health.authorized ? "已授权" : "未授权"),
-                    tint: Palette.red
-                )
-            }
-            .buttonStyle(.plain)
-
-            divider
-
-            Button {
-                watch.activate()
-                toast = watch.supported ? "手表桥接已启动" : "这台设备不支持 Watch 连接"
-            } label: {
-                SettingRow(
-                    icon: "applewatch",
-                    title: "Apple Watch",
-                    value: watch.reachable ? "在线" : (watch.supported ? "已配对未连接" : "不可用"),
-                    tint: Palette.green
-                )
-            }
-            .buttonStyle(.plain)
-
-            divider
-
-            NavigationLink {
-                PlaylistImportView()
-            } label: {
-                SettingRow(icon: "music.note.list", title: "歌单链接导入", value: "解析", tint: Palette.pink)
-            }
-            .buttonStyle(.plain)
-
-            divider
-
-            NavigationLink {
-                LyricsView()
-            } label: {
-                SettingRow(icon: "text.alignleft", title: "歌词同步", value: "不限次数", tint: Palette.blue)
-            }
-            .buttonStyle(.plain)
-        }
-        .card(radius: 22, fill: Palette.card, stroke: Palette.stroke)
-    }
-
-    private var toolSection: some View {
-        VStack(spacing: 0) {
-            NavigationLink {
-                PluginsView()
-            } label: {
-                SettingRow(icon: "square.grid.2x2", title: "插件市场", value: "4 个小工具", tint: Palette.amber)
-            }
-            .buttonStyle(.plain)
-
-            divider
-
-            NavigationLink {
-                RepCounterView()
-            } label: {
-                SettingRow(icon: "figure.strengthtraining.functional", title: "视觉动作计数", value: "相机", tint: Palette.green)
-            }
-            .buttonStyle(.plain)
-
-            divider
-
-            NavigationLink {
-                PlanEditorView()
-            } label: {
-                SettingRow(icon: "calendar", title: "训练计划", value: "\(profile.daysPerWeek) 天/周", tint: Palette.blue)
-            }
-            .buttonStyle(.plain)
         }
         .card(radius: 22, fill: Palette.card, stroke: Palette.stroke)
     }
@@ -378,12 +551,35 @@ struct MeView: View {
             .padding(.leading, 54)
     }
 
+    private func restoreDisplayName(_ url: URL) -> String {
+        url.deletingPathExtension().lastPathComponent
+            .replacingOccurrences(of: "state.backup-before-import-", with: "")
+    }
+
+    private func restoreBackup(_ url: URL) {
+        do {
+            try store.importData(Data(contentsOf: url))
+            toast = "已恢复备份"
+        } catch {
+            toast = error.localizedDescription
+        }
+    }
+
+    private func doImport() {
+        guard let data = pendingImportData else { return }
+        pendingImportData = nil
+        do {
+            try store.importData(data)
+            toast = "备份已导入"
+        } catch {
+            toast = error.localizedDescription
+        }
+    }
+
     private func syncHealth() {
         syncing = true
         Task {
-            if !health.authorized {
-                await health.requestAuthorization()
-            }
+            if !health.authorized { await health.requestAuthorization() }
             let metrics = await health.todayMetrics()
             if metrics.steps > 0 || metrics.activeKcal > 0 {
                 var snap = store.todaySnapshot
@@ -403,6 +599,115 @@ struct MeView: View {
             }
             syncing = false
         }
+    }
+}
+
+// MARK: - 伤病规避编辑器 & 最大心率编辑器
+
+private struct InjuryAvoidEditorSheet: View {
+    @EnvironmentObject private var store: AppStore
+    @Environment(\.dismiss) private var dismiss
+
+    private let options = [
+        "腕管综合征", "肩峰撞击", "腰椎下背不适", "膝关节髌腱",
+        "肘关节网球肘", "踝关节旧伤", "颈椎紧张"
+    ]
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                Palette.bg.ignoresSafeArea()
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("勾选需要规避的部位，AI 教练在推荐动作和重量时会自动绕开高压动作。")
+                            .font(.system(size: 13))
+                            .foregroundStyle(Palette.textDim)
+
+                        ForEach(options, id: \.self) { area in
+                            let on = store.state.profile.injuryAvoidAreas.contains(area)
+                            Button {
+                                if on {
+                                    store.state.profile.injuryAvoidAreas.removeAll { $0 == area }
+                                } else {
+                                    store.state.profile.injuryAvoidAreas.append(area)
+                                }
+                            } label: {
+                                HStack {
+                                    Text(area)
+                                        .font(.system(size: 15, weight: .semibold))
+                                        .foregroundStyle(Palette.text)
+                                    Spacer()
+                                    Image(systemName: on ? "checkmark.circle.fill" : "circle")
+                                        .foregroundStyle(on ? Palette.amber : Palette.textFaint)
+                                }
+                                .padding(14)
+                                .card(radius: 16, fill: Palette.card, stroke: on ? Palette.amber.opacity(0.45) : Palette.stroke)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    .padding(Metrics.page)
+                }
+            }
+            .navigationTitle("受伤与避免区域")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("完成") { dismiss() }.foregroundStyle(Palette.amber)
+                }
+            }
+        }
+        .preferredColorScheme(.dark)
+    }
+}
+
+private struct MaxHeartRateEditorSheet: View {
+    @EnvironmentObject private var store: AppStore
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        let hr = Double(store.state.profile.maxHeartRate)
+        NavigationStack {
+            ZStack {
+                Palette.bg.ignoresSafeArea()
+                VStack(spacing: 14) {
+                    Stepper("最大心率：\(store.state.profile.maxHeartRate) bpm", value: $store.state.profile.maxHeartRate, in: 140...220)
+                        .font(.system(size: 15, weight: .bold))
+                        .foregroundStyle(Palette.text)
+                        .padding(16)
+                        .card(radius: 18, fill: Palette.card, stroke: Palette.stroke)
+
+                    VStack(spacing: 8) {
+                        zoneRow("Z1 热身恢复 (50–60%)", "\(Int(hr * 0.5))–\(Int(hr * 0.6)) bpm", Palette.blue)
+                        zoneRow("Z2 燃脂有氧 (60–70%)", "\(Int(hr * 0.6))–\(Int(hr * 0.7)) bpm", Palette.green)
+                        zoneRow("Z3 耐力节奏 (70–80%)", "\(Int(hr * 0.7))–\(Int(hr * 0.8)) bpm", Palette.yellow)
+                        zoneRow("Z4 乳酸阈值 (80–90%)", "\(Int(hr * 0.8))–\(Int(hr * 0.9)) bpm", Palette.amber)
+                        zoneRow("Z5 无氧极限 (90–100%)", "\(Int(hr * 0.9))–\(Int(hr)) bpm", Palette.coralHi)
+                    }
+                    Spacer()
+                }
+                .padding(Metrics.page)
+            }
+            .navigationTitle("心率区间")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("完成") { dismiss() }.foregroundStyle(Palette.coralHi)
+                }
+            }
+        }
+        .preferredColorScheme(.dark)
+    }
+
+    private func zoneRow(_ name: String, _ range: String, _ color: Color) -> some View {
+        HStack {
+            Circle().fill(color).frame(width: 8, height: 8)
+            Text(name).font(.system(size: 13.5, weight: .medium)).foregroundStyle(Palette.text)
+            Spacer()
+            Text(range).font(.system(size: 13, weight: .bold, design: .rounded)).foregroundStyle(color)
+        }
+        .padding(13)
+        .card(radius: 14, fill: Palette.card, stroke: Palette.stroke)
     }
 }
 
