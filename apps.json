@@ -11,24 +11,24 @@
       "iconURL": "https://raw.githubusercontent.com/yuanyeye0210-debug/stride-app/main/ios/Stride/Resources/Assets.xcassets/AppIcon.appiconset/AppIcon.png",
       "icon": "https://raw.githubusercontent.com/yuanyeye0210-debug/stride-app/main/ios/Stride/Resources/Assets.xcassets/AppIcon.appiconset/AppIcon.png",
       "tintColor": "5CE08F",
-      "version": "1.1.9",
-      "date": "2026-11-12T13:21:51Z",
-      "downloadURL": "https://github.com/yuanyeye0210-debug/stride-app/releases/download/stride-v1.1.9/Stride-1.1.9.ipa",
-      "size": 1547607,
+      "version": "1.1.11",
+      "date": "2026-11-21T18:10:22Z",
+      "downloadURL": "https://github.com/yuanyeye0210-debug/stride-app/releases/download/stride-v1.1.11/Stride-1.1.11.ipa",
+      "size": 1908131,
       "versions": [
+        {
+          "version": "1.1.11",
+          "date": "2026-11-21T18:10:22Z",
+          "localizedDescription": "步迹 1.1.11。未签名安装包，用 SideStore 和 LocalDevVPN 安装。",
+          "downloadURL": "https://github.com/yuanyeye0210-debug/stride-app/releases/download/stride-v1.1.11/Stride-1.1.11.ipa",
+          "size": 1908131
+        },
         {
           "version": "1.1.9",
           "date": "2026-11-12T13:21:51Z",
           "localizedDescription": "步迹 1.1.9。未签名安装包，用 SideStore 和 LocalDevVPN 安装。",
           "downloadURL": "https://github.com/yuanyeye0210-debug/stride-app/releases/download/stride-v1.1.9/Stride-1.1.9.ipa",
           "size": 1547607
-        },
-        {
-          "version": "1.1.4",
-          "date": "2026-11-12T01:55:34Z",
-          "localizedDescription": "步迹 1.1.4。未签名安装包，用 SideStore 和 LocalDevVPN 安装。",
-          "downloadURL": "https://github.com/yuanyeye0210-debug/stride-app/releases/download/stride-v1.1.4/Stride-1.1.4.ipa",
-          "size": 1498704
         }
       ]
     }
