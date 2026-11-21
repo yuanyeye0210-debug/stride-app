@@ -8,7 +8,11 @@ enum Brand {
     static let bundleID = "com.yg.stride"
     static let supportEmail = "support@example.com"
 
-    /// 会员品牌名（会员方案页标题用）
+    /// 品牌衍生展示名（严格本地化，不出现外部品牌或登录/付费入口）
+    static let canteenTitle = "\(name) 食堂"
+    static let intelligenceName = "\(name) Intelligence"
+
+    /// 兼容既有引用的档位名称（当前发行版默认全部开放）
     static let tierMax = "\(name) Max"
     static let tierPro = "\(name) Pro"
 }

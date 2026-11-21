@@ -112,13 +112,50 @@ struct WorkoutSession: Identifiable, Codable, Hashable {
 // MARK: - 饮食
 
 struct FoodItem: Identifiable, Codable, Hashable {
-    var id = UUID()
+    var id: UUID
     var name: String
     var grams: Double
     var kcal: Double
     var protein: Double
     var carbs: Double
     var fat: Double
+    var fiber: Double
+
+    enum CodingKeys: String, CodingKey {
+        case id, name, grams, kcal, protein, carbs, fat, fiber
+    }
+
+    init(
+        id: UUID = UUID(),
+        name: String,
+        grams: Double,
+        kcal: Double,
+        protein: Double,
+        carbs: Double,
+        fat: Double,
+        fiber: Double = 0
+    ) {
+        self.id = id
+        self.name = name
+        self.grams = grams
+        self.kcal = kcal
+        self.protein = protein
+        self.carbs = carbs
+        self.fat = fat
+        self.fiber = fiber
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
+        name = try c.decode(String.self, forKey: .name)
+        grams = try c.decode(Double.self, forKey: .grams)
+        kcal = try c.decode(Double.self, forKey: .kcal)
+        protein = try c.decode(Double.self, forKey: .protein)
+        carbs = try c.decode(Double.self, forKey: .carbs)
+        fat = try c.decode(Double.self, forKey: .fat)
+        fiber = try c.decodeIfPresent(Double.self, forKey: .fiber) ?? 0
+    }
 }
 
 struct FoodEntry: Identifiable, Codable, Hashable {
@@ -133,6 +170,7 @@ struct FoodEntry: Identifiable, Codable, Hashable {
     var protein: Double { items.reduce(0) { $0 + $1.protein } }
     var carbs: Double { items.reduce(0) { $0 + $1.carbs } }
     var fat: Double { items.reduce(0) { $0 + $1.fat } }
+    var fiber: Double { items.reduce(0) { $0 + $1.fiber } }
 }
 
 enum Meal: String, Codable, CaseIterable, Identifiable {
@@ -151,6 +189,98 @@ enum Meal: String, Codable, CaseIterable, Identifiable {
         case .snack: return "takeoutbag.and.cup.and.straw.fill"
         }
     }
+}
+
+// MARK: - 补剂与咖啡因
+
+struct SupplementItem: Identifiable, Codable, Hashable {
+    var id: UUID
+    var name: String
+    var dosage: String
+    var timingHint: String
+
+    init(id: UUID = UUID(), name: String, dosage: String, timingHint: String = "每日一次") {
+        self.id = id
+        self.name = name
+        self.dosage = dosage
+        self.timingHint = timingHint
+    }
+}
+
+struct SupplementLog: Identifiable, Codable, Hashable {
+    var id = UUID()
+    var day: String
+    var itemIDs: [UUID] = []
+}
+
+struct CaffeineEntry: Identifiable, Codable, Hashable {
+    var id = UUID()
+    var date: Date = Date()
+    var title: String
+    var mg: Int
+}
+
+// MARK: - 首页小组件布局
+
+enum HomeWidgetKind: String, Codable, CaseIterable, Identifiable {
+    case aiHabit
+    case water
+    case coachNote
+    case supplements
+    case streakCalendar
+    case calorieBalance
+    case muscleRecovery
+    case caffeine
+    case foodReceipt
+    case activityRings
+    case monthlyHours
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .aiHabit: return "AI 训练习惯"
+        case .water: return "饮水仪表盘"
+        case .coachNote: return "教练便利贴"
+        case .supplements: return "每日补剂"
+        case .streakCalendar: return "连续训练日历"
+        case .calorieBalance: return "还能吃"
+        case .muscleRecovery: return "肌肉恢复"
+        case .caffeine: return "咖啡因代谢"
+        case .foodReceipt: return "\(Brand.canteenTitle)小票"
+        case .activityRings: return "活动三环"
+        case .monthlyHours: return "本月训练时长"
+        }
+    }
+
+    var subtitle: String {
+        switch self {
+        case .aiHabit: return "展示本机训练习惯与推荐节奏"
+        case .water: return "半圆表盘快捷加减饮水量"
+        case .coachNote: return "每日训练提醒，可切换语录"
+        case .supplements: return "补剂清单管理与一键打卡"
+        case .streakCalendar: return "连续训练天数与宜忌提示"
+        case .calorieBalance: return "剩余热量与快速拍照记餐"
+        case .muscleRecovery: return "胸/肩/背/腿恢复状态与推荐部位"
+        case .caffeine: return "实时摄入、代谢与最佳饮用窗口"
+        case .foodReceipt: return "收银小票样式展示今日餐单"
+        case .activityRings: return "活动热量、锻炼时长与步数三环"
+        case .monthlyHours: return "黄皮尺视觉统计本月累计时长"
+        }
+    }
+
+    var isFullWidth: Bool {
+        self == .aiHabit
+    }
+
+    static let defaultOrder: [HomeWidgetKind] = [
+        .aiHabit,
+        .water, .coachNote,
+        .supplements, .streakCalendar,
+        .calorieBalance, .muscleRecovery,
+        .caffeine, .foodReceipt,
+        .activityRings, .monthlyHours
+    ]
 }
 
 // MARK: - 教练
@@ -249,13 +379,63 @@ enum ShareTemplate: String, Codable, CaseIterable, Identifiable {
 // MARK: - 每日概览
 
 struct DailySnapshot: Identifiable, Codable, Hashable {
-    var id = UUID()
-    var date: Date = Date()
-    var steps: Int = 0
-    var activeKcal: Int = 0
-    var exerciseMin: Int = 0
-    var restingHR: Int = 0
-    var weightKg: Double = 0
+    var id: UUID
+    var date: Date
+    var steps: Int
+    var activeKcal: Int
+    var exerciseMin: Int
+    var restingHR: Int
+    var weightKg: Double
+    var sleepMinutes: Int
+    var standHours: Int
+    var flightsClimbed: Int
+    var hrvMs: Int
+
+    enum CodingKeys: String, CodingKey {
+        case id, date, steps, activeKcal, exerciseMin, restingHR, weightKg
+        case sleepMinutes, standHours, flightsClimbed, hrvMs
+    }
+
+    init(
+        id: UUID = UUID(),
+        date: Date = Date(),
+        steps: Int = 0,
+        activeKcal: Int = 0,
+        exerciseMin: Int = 0,
+        restingHR: Int = 0,
+        weightKg: Double = 0,
+        sleepMinutes: Int = 0,
+        standHours: Int = 0,
+        flightsClimbed: Int = 0,
+        hrvMs: Int = 0
+    ) {
+        self.id = id
+        self.date = date
+        self.steps = steps
+        self.activeKcal = activeKcal
+        self.exerciseMin = exerciseMin
+        self.restingHR = restingHR
+        self.weightKg = weightKg
+        self.sleepMinutes = sleepMinutes
+        self.standHours = standHours
+        self.flightsClimbed = flightsClimbed
+        self.hrvMs = hrvMs
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
+        date = try c.decodeIfPresent(Date.self, forKey: .date) ?? Date()
+        steps = try c.decodeIfPresent(Int.self, forKey: .steps) ?? 0
+        activeKcal = try c.decodeIfPresent(Int.self, forKey: .activeKcal) ?? 0
+        exerciseMin = try c.decodeIfPresent(Int.self, forKey: .exerciseMin) ?? 0
+        restingHR = try c.decodeIfPresent(Int.self, forKey: .restingHR) ?? 0
+        weightKg = try c.decodeIfPresent(Double.self, forKey: .weightKg) ?? 0
+        sleepMinutes = try c.decodeIfPresent(Int.self, forKey: .sleepMinutes) ?? 0
+        standHours = try c.decodeIfPresent(Int.self, forKey: .standHours) ?? 0
+        flightsClimbed = try c.decodeIfPresent(Int.self, forKey: .flightsClimbed) ?? 0
+        hrvMs = try c.decodeIfPresent(Int.self, forKey: .hrvMs) ?? 0
+    }
 
     func progress(goal: Int) -> Double {
         guard goal > 0 else { return 0 }
@@ -270,6 +450,7 @@ struct WeekVolume: Identifiable, Hashable {
 }
 
 // MARK: - 训练计划
+
 struct PlannedExercise: Identifiable, Codable, Hashable {
     var id = UUID()
     var name: String
@@ -334,16 +515,72 @@ enum Experience: String, Codable, CaseIterable, Identifiable {
 }
 
 struct Profile: Codable, Hashable {
-    var nickname: String = "YG"
-    var goal: Goal = .recomp
-    var experience: Experience = .intermediate
-    var daysPerWeek: Int = 4
-    var heightCm: Double = 178
-    var weightKg: Double = 76
-    var age: Int = 30
-    var sexMale: Bool = true
-    var dailyKcalGoal: Int = 2200
-    var weeklyWorkoutsGoal: Int = 4
+    var nickname: String
+    var goal: Goal
+    var experience: Experience
+    var daysPerWeek: Int
+    var heightCm: Double
+    var weightKg: Double
+    var age: Int
+    var sexMale: Bool
+    var dailyKcalGoal: Int
+    var weeklyWorkoutsGoal: Int
+    var maxHeartRate: Int
+    var injuryAvoidAreas: [String]
+    var preferredUnit: String
+
+    enum CodingKeys: String, CodingKey {
+        case nickname, goal, experience, daysPerWeek, heightCm, weightKg
+        case age, sexMale, dailyKcalGoal, weeklyWorkoutsGoal
+        case maxHeartRate, injuryAvoidAreas, preferredUnit
+    }
+
+    init(
+        nickname: String = "YG",
+        goal: Goal = .recomp,
+        experience: Experience = .intermediate,
+        daysPerWeek: Int = 4,
+        heightCm: Double = 178,
+        weightKg: Double = 76,
+        age: Int = 30,
+        sexMale: Bool = true,
+        dailyKcalGoal: Int = 2200,
+        weeklyWorkoutsGoal: Int = 4,
+        maxHeartRate: Int = 190,
+        injuryAvoidAreas: [String] = [],
+        preferredUnit: String = "kg"
+    ) {
+        self.nickname = nickname
+        self.goal = goal
+        self.experience = experience
+        self.daysPerWeek = daysPerWeek
+        self.heightCm = heightCm
+        self.weightKg = weightKg
+        self.age = age
+        self.sexMale = sexMale
+        self.dailyKcalGoal = dailyKcalGoal
+        self.weeklyWorkoutsGoal = weeklyWorkoutsGoal
+        self.maxHeartRate = maxHeartRate
+        self.injuryAvoidAreas = injuryAvoidAreas
+        self.preferredUnit = preferredUnit
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        nickname = try c.decodeIfPresent(String.self, forKey: .nickname) ?? "YG"
+        goal = try c.decodeIfPresent(Goal.self, forKey: .goal) ?? .recomp
+        experience = try c.decodeIfPresent(Experience.self, forKey: .experience) ?? .intermediate
+        daysPerWeek = try c.decodeIfPresent(Int.self, forKey: .daysPerWeek) ?? 4
+        heightCm = try c.decodeIfPresent(Double.self, forKey: .heightCm) ?? 178
+        weightKg = try c.decodeIfPresent(Double.self, forKey: .weightKg) ?? 76
+        age = try c.decodeIfPresent(Int.self, forKey: .age) ?? 30
+        sexMale = try c.decodeIfPresent(Bool.self, forKey: .sexMale) ?? true
+        dailyKcalGoal = try c.decodeIfPresent(Int.self, forKey: .dailyKcalGoal) ?? 2200
+        weeklyWorkoutsGoal = try c.decodeIfPresent(Int.self, forKey: .weeklyWorkoutsGoal) ?? 4
+        maxHeartRate = try c.decodeIfPresent(Int.self, forKey: .maxHeartRate) ?? 190
+        injuryAvoidAreas = try c.decodeIfPresent([String].self, forKey: .injuryAvoidAreas) ?? []
+        preferredUnit = try c.decodeIfPresent(String.self, forKey: .preferredUnit) ?? "kg"
+    }
 
     var bmr: Double {
         // Mifflin-St Jeor
@@ -458,9 +695,21 @@ struct AppState: Codable {
     var planUndo: [PlannedDay]? = nil
     var weekStamp: Int = 0
 
+    // Phase 1 新增状态（全部向后兼容解码）
+    var supplements: [SupplementItem] = []
+    var supplementLogs: [SupplementLog] = []
+    var caffeineEntries: [CaffeineEntry] = []
+    var caffeineLimitMg: Int = 400
+    var sleepTargetHour: Int = 23
+    var sleepTargetMinute: Int = 5
+    var homeWidgets: [HomeWidgetKind] = HomeWidgetKind.defaultOrder
+    var hiddenHomeWidgets: [HomeWidgetKind] = []
+
     enum CodingKeys: String, CodingKey {
         case profile, exercises, sessions, foods, runs, chats, snapshots, plan, membership, quotas, seeded
         case waterDays, waterGoalMl, lastWeekPlan, planUndo, weekStamp
+        case supplements, supplementLogs, caffeineEntries, caffeineLimitMg
+        case sleepTargetHour, sleepTargetMinute, homeWidgets, hiddenHomeWidgets
     }
 
     init() {}
@@ -483,6 +732,16 @@ struct AppState: Codable {
         lastWeekPlan = try c.decodeIfPresent([PlannedDay].self, forKey: .lastWeekPlan) ?? []
         planUndo = try c.decodeIfPresent([PlannedDay].self, forKey: .planUndo)
         weekStamp = try c.decodeIfPresent(Int.self, forKey: .weekStamp) ?? 0
+
+        supplements = try c.decodeIfPresent([SupplementItem].self, forKey: .supplements) ?? []
+        supplementLogs = try c.decodeIfPresent([SupplementLog].self, forKey: .supplementLogs) ?? []
+        caffeineEntries = try c.decodeIfPresent([CaffeineEntry].self, forKey: .caffeineEntries) ?? []
+        caffeineLimitMg = try c.decodeIfPresent(Int.self, forKey: .caffeineLimitMg) ?? 400
+        sleepTargetHour = try c.decodeIfPresent(Int.self, forKey: .sleepTargetHour) ?? 23
+        sleepTargetMinute = try c.decodeIfPresent(Int.self, forKey: .sleepTargetMinute) ?? 5
+        let savedWidgets = try c.decodeIfPresent([HomeWidgetKind].self, forKey: .homeWidgets) ?? HomeWidgetKind.defaultOrder
+        homeWidgets = savedWidgets.isEmpty ? HomeWidgetKind.defaultOrder : savedWidgets
+        hiddenHomeWidgets = try c.decodeIfPresent([HomeWidgetKind].self, forKey: .hiddenHomeWidgets) ?? []
     }
 
     func encode(to encoder: Encoder) throws {
@@ -503,5 +762,14 @@ struct AppState: Codable {
         try c.encode(lastWeekPlan, forKey: .lastWeekPlan)
         try c.encodeIfPresent(planUndo, forKey: .planUndo)
         try c.encode(weekStamp, forKey: .weekStamp)
+
+        try c.encode(supplements, forKey: .supplements)
+        try c.encode(supplementLogs, forKey: .supplementLogs)
+        try c.encode(caffeineEntries, forKey: .caffeineEntries)
+        try c.encode(caffeineLimitMg, forKey: .caffeineLimitMg)
+        try c.encode(sleepTargetHour, forKey: .sleepTargetHour)
+        try c.encode(sleepTargetMinute, forKey: .sleepTargetMinute)
+        try c.encode(homeWidgets, forKey: .homeWidgets)
+        try c.encode(hiddenHomeWidgets, forKey: .hiddenHomeWidgets)
     }
 }

@@ -3,44 +3,79 @@ import SwiftUI
 struct TodayView: View {
     @EnvironmentObject private var store: AppStore
     @EnvironmentObject private var health: HealthKitManager
+    @EnvironmentObject private var watch: WatchSession
 
+    @State private var waterStepMl: Int = WaterLog.stepMl
+    @State private var quoteIndex: Int = 0
+    @State private var healthMetrics: HealthKitManager.DayMetrics?
+
+    // 交互弹窗
     @State private var showWorkoutSheet = false
     @State private var showFoodSheet = false
+    @State private var foodStartWithCamera = false
     @State private var showRunSheet = false
     @State private var showCoachSheet = false
-    @State private var healthMetrics: HealthKitManager.DayMetrics?
+    @State private var showWidgetManager = false
+    @State private var showSupplementSheet = false
+    @State private var showCaffeineSheet = false
+    @State private var showHabitSheet = false
+    @State private var showRecoverySheet = false
+    @State private var showActivitySheet = false
+
+    /// 供外层切换至“计划”Tab（点击连续训练日历时使用）
+    var onJumpToPlan: (() -> Void)? = nil
 
     private var profile: Profile { store.state.profile }
     private var snapshot: DailySnapshot { store.todaySnapshot }
     private var nutrition: (kcal: Double, p: Double, c: Double, f: Double) { store.todayNutrition }
 
-    private var greeting: String {
-        let hour = Calendar.current.component(.hour, from: Date())
-        switch hour {
-        case 5..<11: return "早上好"
-        case 11..<14: return "中午好"
-        case 14..<18: return "下午好"
-        case 18..<23: return "晚上好"
-        default: return "该睡了"
-        }
+    private var stepsToday: Int {
+        max(snapshot.steps, healthMetrics?.steps ?? 0)
+    }
+
+    private var kcalToday: Int {
+        max(snapshot.activeKcal, healthMetrics?.activeKcal ?? 0)
+    }
+
+    private var habitSummary: TrainingHabitSummary {
+        HabitAnalyzer.summarize(
+            sessions: store.state.sessions,
+            watchConnected: watch.reachable
+        )
+    }
+
+    private var recoveryItems: [MuscleRecoveryItem] {
+        let balance = ProgressiveEngine.weeklySetBalance(sessions: store.state.sessions)
+        return MuscleRecoveryCalculator.assess(
+            sessions: store.state.sessions,
+            weeklySets: balance,
+            plannedFocus: store.todaysPlannedDay?.focus
+        )
+    }
+
+    private var monthlyStats: (hours: Double, count: Int) {
+        MonthlyTrainingCalculator.stats(
+            sessions: store.state.sessions,
+            runs: store.state.runs
+        )
     }
 
     var body: some View {
         ZStack {
-            ScreenBackground()
+            Palette.bg.ignoresSafeArea()
 
             ScrollView(showsIndicators: false) {
-                VStack(spacing: 14) {
-                    header
-                    activityCard
-                    waterCard
-                    quickActions
-                    planCard
-                    nutritionCard
-                    recentCard
+                VStack(spacing: Metrics.gap) {
+                    ForEach(bentoRows) { row in
+                        rowView(row)
+                    }
+
+                    addWidgetButton
+                        .padding(.top, 8)
                 }
                 .padding(.horizontal, Metrics.page)
-                .padding(.bottom, 28)
+                .padding(.top, 66) // 为顶部悬浮 Liquid Glass 分段胶囊栏留出空间
+                .padding(.bottom, Metrics.floatingTabBottomInset + 16)
             }
         }
         .toolbar(.hidden, for: .navigationBar)
@@ -54,7 +89,7 @@ struct TodayView: View {
             SessionView(draft: SessionDraft.fromPlan(store.todaysPlannedDay))
         }
         .sheet(isPresented: $showFoodSheet) {
-            FoodScanView()
+            FoodScanView(startWithPhotoPicker: foodStartWithCamera)
         }
         .sheet(isPresented: $showRunSheet) {
             RunCaptureView()
@@ -62,364 +97,212 @@ struct TodayView: View {
         .sheet(isPresented: $showCoachSheet) {
             NavigationStack { CoachView() }
         }
-    }
-
-    // MARK: - 头部
-
-    private var header: some View {
-        HStack(alignment: .top) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(greeting)
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundStyle(Palette.textDim)
-                Text(profile.nickname)
-                    .font(.system(size: 30, weight: .heavy))
-                    .foregroundStyle(Palette.text)
-                Text(dateLine)
-                    .font(.system(size: 13))
-                    .foregroundStyle(Palette.textFaint)
-            }
-            Spacer()
-            Button {
-                showCoachSheet = true
-            } label: {
-                Image(systemName: "sparkles")
-                    .font(.system(size: 16, weight: .bold))
-                    .foregroundStyle(Color.black)
-                    .frame(width: 40, height: 40)
-                    .background(Circle().fill(Color.white))
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("教练")
-            .padding(.top, 6)
+        .sheet(isPresented: $showWidgetManager) {
+            HomeWidgetManagerSheet()
         }
-        .padding(.top, 8)
+        .sheet(isPresented: $showSupplementSheet) {
+            SupplementSheet()
+        }
+        .sheet(isPresented: $showCaffeineSheet) {
+            CaffeineSheet()
+        }
+        .sheet(isPresented: $showHabitSheet) {
+            HabitInsightSheet(summary: habitSummary)
+        }
+        .sheet(isPresented: $showRecoverySheet) {
+            MuscleRecoverySheet(items: recoveryItems) {
+                showWorkoutSheet = true
+            }
+        }
+        .sheet(isPresented: $showActivitySheet) {
+            ActivityDetailSheet(
+                kcal: kcalToday,
+                kcalGoal: max(1, profile.kcalTarget * 2 / 3),
+                exerciseMin: snapshot.exerciseMin,
+                steps: stepsToday,
+                streak: store.streak,
+                onStartWorkout: { showWorkoutSheet = true },
+                onStartRun: { showRunSheet = true }
+            )
+        }
     }
 
-    private var dateLine: String {
-        let f = DateFormatter()
-        f.locale = Locale(identifier: "zh_CN")
-        f.dateFormat = "M 月 d 日 EEEE"
-        return f.string(from: Date())
+    // MARK: - 底部“添加小组件”按钮
+
+    private var addWidgetButton: some View {
+        Button {
+            showWidgetManager = true
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: "plus")
+                    .font(.system(size: 13, weight: .bold))
+                Text("添加小组件")
+                    .font(.system(size: 14, weight: .semibold))
+            }
+            .foregroundStyle(Palette.text)
+            .padding(.horizontal, 22)
+            .padding(.vertical, 12)
+            .background(Capsule().fill(Color.white.opacity(0.11)))
+            .overlay(Capsule().strokeBorder(Color.white.opacity(0.14), lineWidth: 0.8))
+        }
+        .buttonStyle(.plain)
     }
 
-    // MARK: - 活跃卡
+    // MARK: - Bento 行组装逻辑
 
-    private var activityCard: some View {
-        HStack(spacing: 18) {
-            RingStat(
-                progress: Double(kcalToday) / Double(max(1, profile.kcalTarget * 2 / 3)),
-                value: "\(kcalToday)",
-                unit: "kcal",
-                caption: "活动",
-                colors: [Palette.green, Color(hex: 0x2AD4C8)],
-                size: 132
+    private enum BentoRowItem: Identifiable {
+        case full(HomeWidgetKind)
+        case pair(HomeWidgetKind, HomeWidgetKind?)
+
+        var id: String {
+            switch self {
+            case .full(let k): return "full-\(k.rawValue)"
+            case .pair(let l, let r): return "pair-\(l.rawValue)-\(r?.rawValue ?? "none")"
+            }
+        }
+    }
+
+    private var bentoRows: [BentoRowItem] {
+        var rows: [BentoRowItem] = []
+        var pendingLeft: HomeWidgetKind?
+
+        for kind in store.visibleHomeWidgets {
+            if kind.isFullWidth {
+                if let left = pendingLeft {
+                    rows.append(.pair(left, nil))
+                    pendingLeft = nil
+                }
+                rows.append(.full(kind))
+            } else if let left = pendingLeft {
+                rows.append(.pair(left, kind))
+                pendingLeft = nil
+            } else {
+                pendingLeft = kind
+            }
+        }
+        if let left = pendingLeft {
+            rows.append(.pair(left, nil))
+        }
+        return rows
+    }
+
+    @ViewBuilder
+    private func rowView(_ row: BentoRowItem) -> some View {
+        switch row {
+        case .full(let kind):
+            widgetView(kind)
+        case .pair(let left, let right):
+            HStack(spacing: Metrics.gap) {
+                widgetView(left)
+                    .frame(maxWidth: .infinity)
+                if let right {
+                    widgetView(right)
+                        .frame(maxWidth: .infinity)
+                } else {
+                    Color.clear
+                        .frame(maxWidth: .infinity, height: 178)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func widgetView(_ kind: HomeWidgetKind) -> some View {
+        switch kind {
+        case .aiHabit:
+            AIHabitBannerCard(summary: habitSummary) {
+                showHabitSheet = true
+            }
+
+        case .water:
+            WaterBentoCard(
+                ml: store.todayWaterMl(),
+                goal: max(store.state.waterGoalMl, 1),
+                stepMl: $waterStepMl
+            ) { delta in
+                store.addWater(delta: delta)
+            }
+
+        case .coachNote:
+            CoachNoteBentoCard(quoteIndex: $quoteIndex) {
+                showCoachSheet = true
+            }
+
+        case .supplements:
+            SupplementBentoCard(
+                items: store.state.supplements,
+                takenIDs: store.takenSupplementIDs(),
+                onToggle: { id in store.toggleSupplement(id) },
+                onManage: { showSupplementSheet = true }
             )
 
-            VStack(alignment: .leading, spacing: 12) {
-                statLine(icon: "figure.walk", value: "\(stepsToday)", unit: "步", hint: "目标 10,000")
-                statLine(icon: "clock.fill", value: "\(snapshot.exerciseMin)", unit: "分钟", hint: "本周 \(store.weekSessions.count) 练")
-                statLine(icon: "flame.fill", value: "\(store.streak)", unit: "天连击", hint: "别断")
-            }
-            Spacer(minLength: 0)
-        }
-        .padding(18)
-        .card(radius: 28, fill: Palette.card, stroke: Palette.stroke)
-    }
-
-    private var stepsToday: Int {
-        max(snapshot.steps, healthMetrics?.steps ?? 0)
-    }
-
-    private var kcalToday: Int {
-        max(snapshot.activeKcal, healthMetrics?.activeKcal ?? 0)
-    }
-
-    private func statLine(icon: String, value: String, unit: String, hint: String) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            HStack(alignment: .firstTextBaseline, spacing: 5) {
-                Image(systemName: icon)
-                    .font(.system(size: 10, weight: .bold))
-                    .foregroundStyle(Palette.textFaint)
-                Text(value)
-                    .font(.system(size: 19, weight: .bold, design: .rounded))
-                    .foregroundStyle(Palette.text)
-                Text(unit)
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(Palette.textDim)
-            }
-            Text(hint)
-                .font(.system(size: 10))
-                .foregroundStyle(Palette.textFaint)
-        }
-    }
-
-    // MARK: - 饮水
-
-    private var waterCard: some View {
-        let ml = store.todayWaterMl()
-        let goal = max(store.state.waterGoalMl, 1)
-        return HStack(alignment: .center, spacing: 8) {
-            VStack(alignment: .leading, spacing: 8) {
-                Text("饮水")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(Palette.textDim)
-                HStack(alignment: .firstTextBaseline, spacing: 4) {
-                    Text("\(ml)")
-                        .font(.system(size: 40, weight: .bold, design: .rounded))
-                        .foregroundStyle(Palette.text)
-                    Text("ml")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(Palette.textDim)
-                }
-                Text("/ \(WaterLog.grouped(goal)) 毫升")
-                    .font(.system(size: 13))
-                    .foregroundStyle(Palette.textFaint)
-                HStack(spacing: 8) {
-                    waterStepButton(systemName: "minus") {
-                        store.addWater(delta: -WaterLog.stepMl)
-                    }
-                    Text("\(WaterLog.stepMl) 毫升")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(Palette.textDim)
-                        .frame(minWidth: 72)
-                    waterStepButton(systemName: "plus") {
-                        store.addWater(delta: WaterLog.stepMl)
-                    }
-                }
-            }
-            Spacer(minLength: 0)
-            WaterGauge(progress: Double(ml) / Double(goal))
-        }
-        .padding(18)
-        .card(radius: 24, fill: Palette.card, stroke: Palette.stroke)
-    }
-
-    private func waterStepButton(systemName: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Image(systemName: systemName)
-                .font(.system(size: 14, weight: .bold))
-                .foregroundStyle(Palette.text)
-                .frame(width: 36, height: 36)
-                .background(Circle().fill(Palette.cardHigh))
-        }
-        .buttonStyle(.plain)
-    }
-
-    // MARK: - 快捷入口
-
-    private var quickActions: some View {
-        HStack(spacing: 10) {
-            quick(icon: "dumbbell.fill", title: "开练", tint: Palette.green) { showWorkoutSheet = true }
-            quick(icon: "camera.fill", title: "记一餐", tint: Palette.amber) { showFoodSheet = true }
-            quick(icon: "figure.run", title: "记跑", tint: Palette.blue) { showRunSheet = true }
-            quick(icon: "sparkles", title: "问教练", tint: Palette.purple) { showCoachSheet = true }
-        }
-    }
-
-    private func quick(icon: String, title: String, tint: Color, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            VStack(spacing: 7) {
-                Image(systemName: icon)
-                    .font(.system(size: 17, weight: .semibold))
-                    .foregroundStyle(tint)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 46)
-                    .background(RoundedRectangle(cornerRadius: 15, style: .continuous).fill(tint.opacity(0.12)))
-                Text(title)
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(Palette.textDim)
-            }
-        }
-        .buttonStyle(.plain)
-    }
-
-    // MARK: - 今日计划
-
-    private var planCard: some View {
-        VStack(alignment: .leading, spacing: 13) {
-            HStack {
-                Text("今日计划")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(Palette.textDim)
-                Spacer()
-                if let day = store.todaysPlannedDay {
-                    Pill(text: day.title, fg: Palette.text, bg: Palette.cardHigh)
-                }
-            }
-
-            if let day = store.todaysPlannedDay {
-                ForEach(day.exercises.prefix(4)) { ex in
-                    HStack {
-                        Text(ex.name)
-                            .font(.system(size: 15, weight: .medium))
-                            .foregroundStyle(Palette.text)
-                        Spacer()
-                        Text("\(ex.sets) × \(ex.reps)")
-                            .font(.system(size: 13, weight: .semibold, design: .rounded))
-                            .foregroundStyle(Palette.textDim)
-                    }
-                }
-                if day.exercises.count > 4 {
-                    Text("还有 \(day.exercises.count - 4) 个动作")
-                        .font(.system(size: 12))
-                        .foregroundStyle(Palette.textFaint)
-                }
-
-                Button {
+        case .streakCalendar:
+            StreakCalendarBentoCard(
+                streak: store.streak,
+                isRestDay: store.todaysPlannedDay == nil
+            ) {
+                if let onJumpToPlan {
+                    onJumpToPlan()
+                } else {
                     showWorkoutSheet = true
-                } label: {
-                    HStack {
-                        Image(systemName: "play.fill").font(.system(size: 12, weight: .bold))
-                        Text("开始训练").font(.system(size: 15, weight: .bold))
-                    }
-                    .foregroundStyle(Color.black)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 13)
-                    .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Color.white))
-                }
-                .buttonStyle(.plain)
-                .padding(.top, 2)
-
-            } else {
-                Text("今天是恢复日")
-                    .font(.system(size: 15, weight: .medium))
-                    .foregroundStyle(Palette.text)
-                Text("走 20 分钟 + 髋活动度，明天再顶。")
-                    .font(.system(size: 13))
-                    .foregroundStyle(Palette.textDim)
-            }
-        }
-        .padding(18)
-        .card(radius: 24, fill: Palette.card, stroke: Palette.stroke)
-    }
-
-    // MARK: - 营养
-
-    private var nutritionCard: some View {
-        VStack(alignment: .leading, spacing: 13) {
-            HStack(alignment: .firstTextBaseline) {
-                Text("营养")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(Palette.textDim)
-                Spacer()
-                Text("\(Int(nutrition.kcal)) / \(profile.kcalTarget) kcal")
-                    .font(.system(size: 13, weight: .semibold, design: .rounded))
-                    .foregroundStyle(Palette.text)
-            }
-
-            BarProgress(progress: nutrition.kcal / Double(max(1, profile.kcalTarget)), color: Palette.amber, height: 8)
-
-            HStack(spacing: 14) {
-                MacroBar(title: "蛋白", current: nutrition.p, target: Double(profile.proteinTarget), color: Palette.green)
-                MacroBar(title: "碳水", current: nutrition.c, target: 240, color: Palette.blue)
-                MacroBar(title: "脂肪", current: nutrition.f, target: 65, color: Palette.amber)
-            }
-
-            if store.todayFoods.isEmpty {
-                Text("还没记录。拍张照，AI 帮你算。")
-                    .font(.system(size: 12))
-                    .foregroundStyle(Palette.textFaint)
-            } else {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 8) {
-                        ForEach(store.todayFoods.prefix(6)) { entry in
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(entry.items.first?.name ?? entry.meal.rawValue)
-                                    .font(.system(size: 12, weight: .medium))
-                                    .foregroundStyle(Palette.text)
-                                Text("\(Int(entry.kcal)) kcal")
-                                    .font(.system(size: 11, weight: .semibold, design: .rounded))
-                                    .foregroundStyle(Palette.textFaint)
-                            }
-                            .padding(.horizontal, 11)
-                            .padding(.vertical, 8)
-                            .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Palette.cardSoft))
-                        }
-                    }
                 }
             }
-        }
-        .padding(18)
-        .card(radius: 24, fill: Palette.card, stroke: Palette.stroke)
-    }
 
-    // MARK: - 最近一次训练
-
-    private var recentCard: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            SectionHeader(title: "最近", trailing: "全部")
-
-            if let last = store.recentSessions.first {
-                HStack(spacing: 13) {
-                    Image(systemName: last.kind.icon)
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundStyle(Palette.green)
-                        .frame(width: 42, height: 42)
-                        .background(RoundedRectangle(cornerRadius: 13, style: .continuous).fill(Palette.green.opacity(0.12)))
-
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(last.title)
-                            .font(.system(size: 15, weight: .semibold))
-                            .foregroundStyle(Palette.text)
-                        Text("\(relativeDay(last.date)) · \(last.totalSets) 组 · \(Int(last.totalVolume)) kg")
-                            .font(.system(size: 12))
-                            .foregroundStyle(Palette.textDim)
-                    }
-                    Spacer()
-                    Text("\(last.durationSec / 60)′")
-                        .font(.system(size: 15, weight: .bold, design: .rounded))
-                        .foregroundStyle(Palette.textFaint)
+        case .calorieBalance:
+            CalorieBalanceBentoCard(
+                remaining: store.remainingKcalToday,
+                goal: profile.kcalTarget,
+                onCamera: {
+                    foodStartWithCamera = true
+                    showFoodSheet = true
+                },
+                onManual: {
+                    foodStartWithCamera = false
+                    showFoodSheet = true
                 }
-            } else {
-                EmptyHint(icon: "dumbbell", title: "还没有记录", message: "点「开练」建第一次训练。")
+            )
+
+        case .muscleRecovery:
+            MuscleRecoveryBentoCard(items: recoveryItems) {
+                showRecoverySheet = true
+            }
+
+        case .caffeine:
+            CaffeineBentoCard(
+                todayMg: store.todayCaffeineMg(),
+                limitMg: store.state.caffeineLimitMg,
+                sleepHour: store.state.sleepTargetHour,
+                sleepMinute: store.state.sleepTargetMinute
+            ) {
+                showCaffeineSheet = true
+            }
+
+        case .foodReceipt:
+            FoodReceiptBentoCard(
+                foods: store.todayFoods,
+                eatenKcal: Int(nutrition.kcal.rounded()),
+                remainingKcal: store.remainingKcalToday
+            ) {
+                foodStartWithCamera = false
+                showFoodSheet = true
+            }
+
+        case .activityRings:
+            ActivityRingsBentoCard(
+                moveProgress: Double(kcalToday) / Double(max(1, profile.kcalTarget * 2 / 3)),
+                exerciseProgress: Double(snapshot.exerciseMin) / 45.0,
+                standProgress: Double(stepsToday) / 10000.0
+            ) {
+                showActivitySheet = true
+            }
+
+        case .monthlyHours:
+            MonthlyHoursBentoCard(
+                hours: monthlyStats.hours,
+                count: monthlyStats.count
+            ) {
+                showWorkoutSheet = true
             }
         }
-        .padding(18)
-        .card(radius: 24, fill: Palette.card, stroke: Palette.stroke)
-    }
-
-    private func relativeDay(_ date: Date) -> String {
-        let cal = Calendar.current
-        if cal.isDateInToday(date) { return "今天" }
-        if cal.isDateInYesterday(date) { return "昨天" }
-        let days = cal.dateComponents([.day], from: date, to: Date()).day ?? 0
-        return "\(days) 天前"
-    }
-}
-
-struct WaterGauge: View {
-    var progress: Double
-
-    var body: some View {
-        Canvas { context, size in
-            let ticks = 20
-            let center = CGPoint(x: size.width / 2, y: size.height - 2)
-            let radius = min(size.width / 2, size.height) - 8
-            let clamped = min(1, max(0, progress))
-            for index in 0...ticks {
-                let t = Double(index) / Double(ticks)
-                let angle = Double.pi + t * Double.pi
-                let inner = radius * 0.68
-                let outer = radius
-                var path = Path()
-                path.move(to: CGPoint(
-                    x: center.x + CGFloat(cos(angle)) * inner,
-                    y: center.y + CGFloat(sin(angle)) * inner
-                ))
-                path.addLine(to: CGPoint(
-                    x: center.x + CGFloat(cos(angle)) * outer,
-                    y: center.y + CGFloat(sin(angle)) * outer
-                ))
-                let lit = t <= clamped + 0.0001
-                context.stroke(
-                    path,
-                    with: .color(lit ? Palette.blue : Palette.stroke),
-                    style: StrokeStyle(lineWidth: 2.4, lineCap: .round)
-                )
-            }
-        }
-        .frame(width: 116, height: 74)
-        .accessibilityLabel("饮水进度")
     }
 }

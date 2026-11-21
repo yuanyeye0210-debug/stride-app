@@ -28,7 +28,7 @@ struct ProgressViewScreen: View {
                     }
                 }
                 .padding(.horizontal, Metrics.page)
-                .padding(.bottom, 28)
+                .padding(.bottom, Metrics.floatingTabBottomInset + 16)
             }
         }
         .navigationTitle("记录")

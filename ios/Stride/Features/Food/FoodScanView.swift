@@ -7,7 +7,11 @@ struct FoodScanView: View {
     @EnvironmentObject private var ai: AISettings
     @Environment(\.dismiss) private var dismiss
 
+    var startWithPhotoPicker: Bool = false
+
     @State private var pickerItem: PhotosPickerItem?
+    @State private var showAutoPicker = false
+    @State private var didAutoPresentPicker = false
     @State private var items: [FoodItem] = []
     @State private var meal: Meal = .lunch
     @State private var busy = false
@@ -63,6 +67,13 @@ struct FoodScanView: View {
                 }
             }
             .sheet(isPresented: $showSettings) { AISettingsView() }
+            .photosPicker(isPresented: $showAutoPicker, selection: $pickerItem, matching: .images, photoLibrary: .shared())
+            .onAppear {
+                if startWithPhotoPicker && !didAutoPresentPicker {
+                    didAutoPresentPicker = true
+                    showAutoPicker = true
+                }
+            }
             .onChange(of: pickerItem) { _, newValue in
                 Task { await handle(newValue) }
             }

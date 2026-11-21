@@ -220,6 +220,11 @@ final class AppStore: ObservableObject {
             .sorted { $0.date < $1.date }
     }
 
+    /// 今日剩余可摄入热量（目标 - 已吃）
+    var remainingKcalToday: Int {
+        state.profile.kcalTarget - Int(todayNutrition.kcal.rounded())
+    }
+
     var todaySnapshot: DailySnapshot {
         if let s = state.snapshots.first(where: { calendar.isDateInToday($0.date) }) { return s }
         return DailySnapshot(date: Date(), steps: 0, activeKcal: 0, exerciseMin: 0, restingHR: 0, weightKg: state.profile.weightKg)
@@ -326,6 +331,114 @@ final class AppStore: ObservableObject {
         } else {
             state.waterDays.append(WaterDay(day: key, ml: next))
         }
+    }
+
+    // MARK: - 补剂管理
+
+    func addSupplement(_ item: SupplementItem) {
+        guard !state.supplements.contains(where: { $0.name == item.name }) else { return }
+        state.supplements.append(item)
+    }
+
+    func removeSupplement(id: UUID) {
+        state.supplements.removeAll { $0.id == id }
+        for idx in state.supplementLogs.indices {
+            state.supplementLogs[idx].itemIDs.removeAll { $0 == id }
+        }
+    }
+
+    func takenSupplementIDs(on date: Date = Date()) -> Set<UUID> {
+        let key = WaterLog.dayKey(date, calendar: calendar)
+        let ids = state.supplementLogs.first { $0.day == key }?.itemIDs ?? []
+        return Set(ids)
+    }
+
+    func toggleSupplement(_ id: UUID, on date: Date = Date()) {
+        let key = WaterLog.dayKey(date, calendar: calendar)
+        if let idx = state.supplementLogs.firstIndex(where: { $0.day == key }) {
+            if let pos = state.supplementLogs[idx].itemIDs.firstIndex(of: id) {
+                state.supplementLogs[idx].itemIDs.remove(at: pos)
+            } else {
+                state.supplementLogs[idx].itemIDs.append(id)
+            }
+        } else {
+            state.supplementLogs.append(SupplementLog(day: key, itemIDs: [id]))
+        }
+    }
+
+    func takeAllSupplementsToday(on date: Date = Date()) {
+        let key = WaterLog.dayKey(date, calendar: calendar)
+        let allIDs = state.supplements.map(\.id)
+        if let idx = state.supplementLogs.firstIndex(where: { $0.day == key }) {
+            state.supplementLogs[idx].itemIDs = allIDs
+        } else {
+            state.supplementLogs.append(SupplementLog(day: key, itemIDs: allIDs))
+        }
+    }
+
+    // MARK: - 咖啡因管理
+
+    func todayCaffeineEntries(now: Date = Date()) -> [CaffeineEntry] {
+        state.caffeineEntries
+            .filter { calendar.isDate($0.date, inSameDayAs: now) }
+            .sorted { $0.date > $1.date }
+    }
+
+    func todayCaffeineMg(now: Date = Date()) -> Int {
+        todayCaffeineEntries(now: now).reduce(0) { $0 + $1.mg }
+    }
+
+    func addCaffeine(title: String, mg: Int, at date: Date = Date()) {
+        guard mg > 0 else { return }
+        state.caffeineEntries.insert(CaffeineEntry(date: date, title: title, mg: mg), at: 0)
+    }
+
+    func deleteCaffeine(id: UUID) {
+        state.caffeineEntries.removeAll { $0.id == id }
+    }
+
+    // MARK: - 首页小组件配置
+
+    var visibleHomeWidgets: [HomeWidgetKind] {
+        let hidden = Set(state.hiddenHomeWidgets)
+        var ordered = state.homeWidgets.filter { !hidden.contains($0) }
+        // 自动补入未出现在配置列表中的新增组件类型
+        for kind in HomeWidgetKind.defaultOrder where !state.homeWidgets.contains(kind) && !hidden.contains(kind) {
+            ordered.append(kind)
+        }
+        return ordered
+    }
+
+    func isWidgetVisible(_ kind: HomeWidgetKind) -> Bool {
+        !state.hiddenHomeWidgets.contains(kind)
+    }
+
+    func setWidgetVisible(_ kind: HomeWidgetKind, visible: Bool) {
+        if visible {
+            state.hiddenHomeWidgets.removeAll { $0 == kind }
+            if !state.homeWidgets.contains(kind) {
+                state.homeWidgets.append(kind)
+            }
+        } else if !state.hiddenHomeWidgets.contains(kind) {
+            state.hiddenHomeWidgets.append(kind)
+        }
+    }
+
+    func moveHomeWidgets(from offsets: IndexSet, to destination: Int) {
+        var current = visibleHomeWidgets
+        let moving = offsets.sorted().compactMap { current.indices.contains($0) ? current[$0] : nil }
+        for index in offsets.sorted(by: >) where current.indices.contains(index) {
+            current.remove(at: index)
+        }
+        let shift = offsets.filter { $0 < destination }.count
+        let target = min(max(0, destination - shift), current.count)
+        current.insert(contentsOf: moving, at: target)
+        state.homeWidgets = current + state.hiddenHomeWidgets
+    }
+
+    func resetHomeWidgets() {
+        state.homeWidgets = HomeWidgetKind.defaultOrder
+        state.hiddenHomeWidgets = []
     }
 
     // MARK: - 本周计划

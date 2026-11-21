@@ -57,7 +57,7 @@ struct MeView: View {
                     aboutSection
                 }
                 .padding(.horizontal, Metrics.page)
-                .padding(.bottom, 30)
+                .padding(.bottom, Metrics.floatingTabBottomInset + 16)
             }
         }
         .navigationTitle("自己")

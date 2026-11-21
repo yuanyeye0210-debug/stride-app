@@ -21,7 +21,7 @@ struct TrainingHomeView: View {
                     historyList
                 }
                 .padding(.horizontal, Metrics.page)
-                .padding(.bottom, 28)
+                .padding(.bottom, Metrics.floatingTabBottomInset + 16)
             }
         }
         .navigationTitle("计划")

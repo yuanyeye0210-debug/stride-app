@@ -2,13 +2,15 @@ import SwiftUI
 import Combine
 
 struct PluginsView: View {
+    var embeddedInChannel: Bool = false
+
     var body: some View {
         ZStack {
             ScreenBackground()
 
             ScrollView(showsIndicators: false) {
                 VStack(spacing: 12) {
-                    Text("全部小工具免费，不订阅也能用。")
+                    Text("全部小工具免费，在本机离线计算。")
                         .font(.system(size: 12))
                         .foregroundStyle(Palette.textFaint)
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -19,7 +21,8 @@ struct PluginsView: View {
                     TempoTool()
                 }
                 .padding(.horizontal, Metrics.page)
-                .padding(.bottom, 24)
+                .padding(.top, embeddedInChannel ? 68 : 6)
+                .padding(.bottom, Metrics.floatingTabBottomInset + 16)
             }
         }
         .navigationTitle("插件市场")
