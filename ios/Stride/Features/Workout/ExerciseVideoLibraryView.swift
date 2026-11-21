@@ -80,7 +80,7 @@ struct ExerciseVideoLibraryView: View {
                         detailExercise = nil
                         startSessionDraft = SessionDraft(
                             title: converted.name,
-                            kind: converted.group == .cardio ? .cardio : .strength,
+                            kind: converted.group == .cardio ? .run : .strength,
                             exercises: [
                                 LoggedExercise(
                                     exerciseID: converted.id,
