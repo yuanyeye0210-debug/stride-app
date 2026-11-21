@@ -7,7 +7,6 @@ struct CoachView: View {
     @State private var input = ""
     @State private var sending = false
     @State private var retryAttempt: Int?
-    @State private var showSettings = false
     @State private var toast: String?
 
     private var messages: [ChatTurn] { store.state.chats }
@@ -61,19 +60,6 @@ struct CoachView: View {
         }
         .navigationTitle("教练")
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                Button {
-                    showSettings = true
-                } label: {
-                    Image(systemName: "slider.horizontal.3")
-                        .foregroundStyle(Palette.textDim)
-                }
-            }
-        }
-        .sheet(isPresented: $showSettings) {
-            AISettingsView()
-        }
         .toast($toast)
     }
 
@@ -88,10 +74,10 @@ struct CoachView: View {
                     .foregroundStyle(Palette.purple)
             }
             VStack(alignment: .leading, spacing: 2) {
-                Text(ai.isConfigured ? "AI 教练 · 在线" : "AI 教练 · 本地模式")
+                Text(ai.isConfigured ? "AI 教练 · Gemini" : "AI 教练 · 本地模式")
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(Palette.text)
-                Text(ai.isConfigured ? "已接入 \(ai.config.provider.shortName) · \(ai.config.chatModel)" : "配置 Gemini / OpenAI Key 后可对话；本地模式已覆盖常见问题")
+                Text(ai.isConfigured ? "已自动匹配 Gemini 教练与分析模型" : "当前离线，自动使用本机教练引擎")
                     .font(.system(size: 11))
                     .foregroundStyle(Palette.textFaint)
                     .lineLimit(1)

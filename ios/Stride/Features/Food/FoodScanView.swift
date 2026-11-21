@@ -18,7 +18,6 @@ struct FoodScanView: View {
     @State private var retryAttempt: Int?
     @State private var errorText: String?
     @State private var query = ""
-    @State private var showSettings = false
     @State private var recognizedByAI = false
 
     private var usedToday: Int { store.state.quotas.used("food") }
@@ -58,15 +57,7 @@ struct FoodScanView: View {
                 ToolbarItem(placement: .topBarLeading) {
                     Button("关闭") { dismiss() }.foregroundStyle(Palette.textDim)
                 }
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        showSettings = true
-                    } label: {
-                        Image(systemName: "gearshape").foregroundStyle(Palette.textDim)
-                    }
-                }
             }
-            .sheet(isPresented: $showSettings) { AISettingsView() }
             .photosPicker(isPresented: $showAutoPicker, selection: $pickerItem, matching: .images, photoLibrary: .shared())
             .onAppear {
                 if startWithPhotoPicker && !didAutoPresentPicker {
@@ -94,7 +85,7 @@ struct FoodScanView: View {
                 Text("AI 热量识别")
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(Palette.text)
-                Text(ai.isConfigured ? "今天还剩 \(remaining) 次" : "未配置 AI 服务，可手动记录")
+                Text(ai.isConfigured ? "Gemini 视觉识别 · 今日剩余 \(remaining) 次" : "当前离线，可手动记录")
                     .font(.system(size: 11))
                     .foregroundStyle(Palette.textFaint)
             }
@@ -320,7 +311,7 @@ struct FoodScanView: View {
         guard let item else { return }
         errorText = nil
         guard ai.isConfigured else {
-            errorText = "还没配置 AI 服务。可以先手动添加食物，或者到「我的 → AI 服务」填 Key 后回来拍照识别。"
+            errorText = "当前离线或 AI 服务暂不可用，您可以先手动添加食物记录。"
             return
         }
         guard Gate.canUseFoodAI(used: usedToday) else {

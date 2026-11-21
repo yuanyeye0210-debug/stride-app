@@ -34,16 +34,39 @@ enum AIProvider: String, Codable, CaseIterable, Hashable, Identifiable {
 
     var defaultChatModel: String {
         switch self {
-        case .gemini: return "gemini-2.5-flash"
+        case .gemini: return "gemini-flash-latest"
         case .openAICompatible: return "gpt-4o-mini"
         }
     }
 
     var defaultVisionModel: String {
         switch self {
-        case .gemini: return "gemini-2.5-flash"
+        case .gemini: return "gemini-flash-latest"
         case .openAICompatible: return "gpt-4o-mini"
         }
+    }
+}
+
+/// 按业务模块自动匹配最合适的 Gemini 模型与容错降级链路。
+enum AIUseCase: Equatable {
+    case coachChat
+    case coachDeepAnalysis
+    case foodVision
+
+    /// 返回优先尝试到保底兜底的模型序列（遇到模型下线 404、限流 429 或超时时自动顺延）。
+    var geminiModelChain: [String] {
+        switch self {
+        case .coachChat:
+            return ["gemini-3.8-flash", "gemini-flash-latest", "gemini-flash-lite-latest"]
+        case .coachDeepAnalysis:
+            return ["gemini-pro-latest", "gemini-3.8-flash", "gemini-flash-latest", "gemini-flash-lite-latest"]
+        case .foodVision:
+            return ["gemini-3.8-flash", "gemini-flash-latest", "gemini-flash-lite-latest"]
+        }
+    }
+
+    var primaryGeminiModel: String {
+        geminiModelChain[0]
     }
 }
 
@@ -56,33 +79,27 @@ struct AIModelPreset: Identifiable, Hashable {
 
     static let geminiPresets: [AIModelPreset] = [
         AIModelPreset(
-            id: "gemini-2.5-flash",
-            label: "2.5 Flash",
-            summary: "推荐 · 均衡快速 · 对话与识食全能",
+            id: "gemini-3.8-flash",
+            label: "3.8 Flash",
+            summary: "推荐 · 最新均衡快速 · 对话与识食全能",
             supportsVision: true
         ),
         AIModelPreset(
-            id: "gemini-2.5-pro",
-            label: "2.5 Pro",
+            id: "gemini-pro-latest",
+            label: "Pro Latest",
             summary: "深度推理 · 适合复杂计划与动作分析",
             supportsVision: true
         ),
         AIModelPreset(
-            id: "gemini-2.5-flash-lite",
-            label: "2.5 Flash-Lite",
-            summary: "极速轻量 · 低延迟低成本",
+            id: "gemini-flash-latest",
+            label: "Flash Latest",
+            summary: "稳定主力 · 高速多模态",
             supportsVision: true
         ),
         AIModelPreset(
-            id: "gemini-3-flash-preview",
-            label: "3 Flash 预览",
-            summary: "新一代多模态快速预览版",
-            supportsVision: true
-        ),
-        AIModelPreset(
-            id: "gemini-3.1-pro-preview",
-            label: "3.1 Pro 预览",
-            summary: "旗舰推理预览版",
+            id: "gemini-flash-lite-latest",
+            label: "Flash-Lite",
+            summary: "极速轻量 · 低延迟高并发",
             supportsVision: true
         )
     ]
@@ -336,7 +353,16 @@ final class AISettings: ObservableObject {
     }
 
     private init() {
-        config = AIKeyVault.load()
+        var loaded = AIKeyVault.load()
+        let builtInKey = BuiltInAISecrets.geminiAPIKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !builtInKey.isEmpty {
+            loaded.provider = .gemini
+            loaded.baseURL = AIProvider.gemini.defaultBaseURL
+            loaded.apiKey = builtInKey
+            loaded.chatModel = AIUseCase.coachChat.primaryGeminiModel
+            loaded.visionModel = AIUseCase.foodVision.primaryGeminiModel
+        }
+        config = loaded
     }
 
     private func persist() {
@@ -361,7 +387,7 @@ enum AIError: LocalizedError, Equatable {
     var errorDescription: String? {
         switch self {
         case .notConfigured:
-            return "还没有配置 AI 服务。到「个人 → AI 服务接口与 Key」配置 Google Gemini 或 OpenAI 兼容 Key。"
+            return "AI 服务暂不可用，当前自动使用本机离线引擎。"
         case .badResponse(let s):
             return "返回格式不对：\(s)"
         case .http(let code, let body):
@@ -519,6 +545,7 @@ struct AIClient {
         messages: [Message],
         model: String,
         config: AIConfig,
+        useCase: AIUseCase? = nil,
         maxTokens: Int = 700,
         onRetry: (@MainActor (Int) -> Void)? = nil
     ) async throws -> String {
@@ -532,7 +559,8 @@ struct AIClient {
                 config: config,
                 maxTokens: maxTokens
             )
-            return try await sendGemini(reqBody, model: model, config: config, onRetry: onRetry)
+            let candidates = geminiModelCandidates(primary: model, useCase: useCase)
+            return try await sendGeminiWithFallback(reqBody, candidates: candidates, config: config, onRetry: onRetry)
 
         case .openAICompatible:
             var payload: [Message] = []
@@ -556,14 +584,17 @@ struct AIClient {
         user: String,
         config: AIConfig,
         model: String? = nil,
+        useCase: AIUseCase? = nil,
         maxTokens: Int = 700,
         onRetry: (@MainActor (Int) -> Void)? = nil
     ) async throws -> String {
-        try await complete(
+        let resolvedModel = model ?? useCase?.primaryGeminiModel ?? config.chatModel
+        return try await complete(
             system: system,
             messages: [Message(role: "user", content: .text(user))],
-            model: model ?? config.chatModel,
+            model: resolvedModel,
             config: config,
+            useCase: useCase,
             maxTokens: maxTokens,
             onRetry: onRetry
         )
@@ -573,6 +604,7 @@ struct AIClient {
         imageBase64JPEG: String,
         prompt: String,
         config: AIConfig,
+        useCase: AIUseCase = .foodVision,
         maxTokens: Int = 800,
         onRetry: (@MainActor (Int) -> Void)? = nil
     ) async throws -> String {
@@ -587,7 +619,8 @@ struct AIClient {
                 config: config,
                 maxTokens: maxTokens
             )
-            return try await sendGemini(reqBody, model: config.visionModel, config: config, onRetry: onRetry)
+            let candidates = geminiModelCandidates(primary: config.visionModel, useCase: useCase)
+            return try await sendGeminiWithFallback(reqBody, candidates: candidates, config: config, onRetry: onRetry)
 
         case .openAICompatible:
             let body = openAIVisionRequest(
@@ -598,6 +631,20 @@ struct AIClient {
             )
             return try await sendOpenAI(body, config: config, onRetry: onRetry)
         }
+    }
+
+    /// 组装按场景选定的模型降级序列，避免单模型限流或下线导致请求失败。
+    static func geminiModelCandidates(primary: String, useCase: AIUseCase?) -> [String] {
+        var ordered: [String] = []
+        if let useCase {
+            ordered.append(contentsOf: useCase.geminiModelChain)
+        } else {
+            let trimmed = primary.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !trimmed.isEmpty { ordered.append(trimmed) }
+            ordered.append(contentsOf: AIUseCase.coachChat.geminiModelChain)
+        }
+        var seen = Set<String>()
+        return ordered.filter { !$0.isEmpty && seen.insert($0).inserted }
     }
 
     /// 拉取当前 Gemini API Key 可用且支持 generateContent 的 Gemini 模型 ID 列表。
@@ -847,6 +894,41 @@ struct AIClient {
     }
 
     // MARK: - 传输
+
+    private static func sendGeminiWithFallback(
+        _ body: GeminiRequest,
+        candidates: [String],
+        config: AIConfig,
+        onRetry: (@MainActor (Int) -> Void)? = nil
+    ) async throws -> String {
+        var lastError: Error = AIError.badResponse("无可用 Gemini 模型")
+        for (index, model) in candidates.enumerated() {
+            do {
+                let useRetry = index == candidates.count - 1 ? onRetry : nil
+                return try await sendGemini(body, model: model, config: config, onRetry: useRetry)
+            } catch is CancellationError {
+                throw CancellationError()
+            } catch let error as AIError where shouldFallbackModel(error) && index < candidates.count - 1 {
+                lastError = error
+                await MainActor.run { onRetry?(index + 2) }
+                continue
+            } catch {
+                throw error
+            }
+        }
+        throw lastError
+    }
+
+    private static func shouldFallbackModel(_ error: AIError) -> Bool {
+        switch error {
+        case .rateLimited, .serverBusy, .timeout:
+            return true
+        case .http(let code, _):
+            return code == 404 || code == 429 || (500...599).contains(code)
+        default:
+            return false
+        }
+    }
 
     private static func sendGemini(
         _ body: GeminiRequest,

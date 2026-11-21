@@ -7,9 +7,24 @@ final class GeminiClientTests: XCTestCase {
         let config = AIConfig()
         XCTAssertEqual(config.provider, .gemini)
         XCTAssertEqual(config.baseURL, "https://generativelanguage.googleapis.com/v1beta")
-        XCTAssertEqual(config.chatModel, "gemini-2.5-flash")
-        XCTAssertEqual(config.visionModel, "gemini-2.5-flash")
+        XCTAssertEqual(config.chatModel, "gemini-flash-latest")
+        XCTAssertEqual(config.visionModel, "gemini-flash-latest")
         XCTAssertFalse(config.isConfigured)
+    }
+
+    func testModuleAutoRoutingAndFallbackChains() {
+        XCTAssertEqual(CoachEngine.useCase(for: "今天练什么"), .coachChat)
+        XCTAssertEqual(CoachEngine.useCase(for: "帮我分析一下最近四周分化训练周期与瓶颈"), .coachDeepAnalysis)
+
+        let chatChain = AIClient.geminiModelCandidates(primary: "", useCase: .coachChat)
+        XCTAssertEqual(chatChain, ["gemini-3.8-flash", "gemini-flash-latest", "gemini-flash-lite-latest"])
+
+        let deepChain = AIClient.geminiModelCandidates(primary: "", useCase: .coachDeepAnalysis)
+        XCTAssertEqual(deepChain.first, "gemini-pro-latest")
+        XCTAssertTrue(deepChain.contains("gemini-flash-lite-latest"))
+
+        let visionChain = AIClient.geminiModelCandidates(primary: "", useCase: .foodVision)
+        XCTAssertEqual(visionChain, ["gemini-3.8-flash", "gemini-flash-latest", "gemini-flash-lite-latest"])
     }
 
     func testLegacyJSONWithoutProviderDecodesBackwardCompatibly() throws {
@@ -197,7 +212,7 @@ final class GeminiClientTests: XCTestCase {
         config.switchProvider(to: .gemini)
         XCTAssertEqual(config.provider, .gemini)
         XCTAssertEqual(config.baseURL, "https://generativelanguage.googleapis.com/v1beta")
-        XCTAssertEqual(config.chatModel, "gemini-2.5-flash")
-        XCTAssertEqual(config.visionModel, "gemini-2.5-flash")
+        XCTAssertEqual(config.chatModel, "gemini-flash-latest")
+        XCTAssertEqual(config.visionModel, "gemini-flash-latest")
     }
 }

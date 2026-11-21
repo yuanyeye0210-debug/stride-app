@@ -145,6 +145,7 @@ enum FoodRecognition {
             imageBase64JPEG: b64,
             prompt: prompt,
             config: config,
+            useCase: .foodVision,
             maxTokens: 900,
             onRetry: onRetry
         )

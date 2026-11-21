@@ -76,6 +76,23 @@ jobs:
             -destination "$DEST" \
             -only-testing:StrideTests
 
+      - name: Inject Gemini API Key
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: |
+          if [ -n "$GEMINI_API_KEY" ]; then
+            cat > Stride/AI/BuiltInAISecrets.swift <<EOF
+          import Foundation
+
+          enum BuiltInAISecrets {
+              static let geminiAPIKey = "$GEMINI_API_KEY"
+          }
+          EOF
+            echo "已注入内置 Gemini API Key（长度：${#GEMINI_API_KEY}）"
+          else
+            echo "未设置 GEMINI_API_KEY Secret，保留空占位"
+          fi
+
       - name: Build (unsigned)
         run: |
           set -o pipefail

@@ -51,6 +51,15 @@ enum CoachEngine {
         return lines.joined(separator: "\n")
     }
 
+    /// 根据提问复杂度自动选择最合适的 Gemini 模型（深层规划/分析走 Pro，日常问答走 Flash）。
+    static func useCase(for text: String) -> AIUseCase {
+        let deepKeywords = ["计划", "周期", "分化", "瓶颈", "评估", "分析", "对比", "减载", "弱项", "1RM", "周期化", "复盘"]
+        if text.count >= 36 || deepKeywords.contains(where: { text.contains($0) }) {
+            return .coachDeepAnalysis
+        }
+        return .coachChat
+    }
+
     static func ask(_ text: String, store: AppStore, config: AIConfig, onRetry: (@MainActor (Int) -> Void)? = nil) async -> (answer: String, usedAI: Bool) {
         if config.isConfigured {
             do {
@@ -59,6 +68,7 @@ enum CoachEngine {
                     system: systemPrompt,
                     user: full,
                     config: config,
+                    useCase: useCase(for: text),
                     maxTokens: 600,
                     onRetry: onRetry
                 )

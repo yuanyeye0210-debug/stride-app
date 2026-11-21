@@ -407,7 +407,7 @@ private struct PrivacyControlSheet: View {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 12) {
                         privacyItem("纯本机数据架构", "你的训练记录、身体围度、餐饮照片、GPS 足迹均只保存在本地设备，步迹没有远端账号服务器。")
-                        privacyItem("AI 钥匙串直连", "仅当你手动在「AI 服务」填写了 API 地址与 Key 时，请求才会直接发往你配置的接口端点，密钥存于系统 Keychain。")
+                        privacyItem("内置 Gemini 直连", "应用已内置 Google Gemini 原生能力，仅在您使用 AI 教练或拍照识食时直接与官方 API 通信，密钥不以明文形式存放在公开源码中。")
                         privacyItem("拍照与视觉动作", "「视觉动作计数」完全通过系统 Vision 在端侧分析关节角度，不采集不上传任何视频帧。")
                     }
                     .padding(Metrics.page)
