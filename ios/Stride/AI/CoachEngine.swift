@@ -328,4 +328,261 @@ enum CoachEngine {
 
         return text.trimmingCharacters(in: .whitespacesAndNewlines)
     }
+
+    /// 从纯文本教练回复中识别并拆解出内嵌结构化训练方案卡片，非训练动作列表返回 nil。
+    nonisolated static func parseStructuredReply(_ raw: String) -> CoachReplyStructure {
+        let cleaned = sanitizePlainText(raw)
+        let lines = cleaned.components(separatedBy: "\n")
+
+        let numberedRegex = try? NSRegularExpression(pattern: "^\\s*(\\d+)[.、]\\s*(.+)$")
+        let doseRegex = try? NSRegularExpression(
+            pattern: "(?:每侧\\s*\\d+(?:[-~]\\d+)?\\s*[次秒分]|\\d+\\s*[组轮]\\s*[×xX*]\\s*\\d+(?:[-~]\\d+)?\\s*[次秒]?|\\d+\\s*[×xX*]\\s*\\d+(?:[-~]\\d+)?(?:\\s*[次秒])?|\\d+(?:[-~]\\d+)?\\s*(?:次|组|秒|分钟|kg|RM))",
+            options: [.caseInsensitive]
+        )
+
+        func parseNumberedLine(_ line: String) -> (number: Int, body: String)? {
+            guard let regex = numberedRegex else { return nil }
+            let ns = line as NSString
+            let range = NSRange(location: 0, length: ns.length)
+            guard let match = regex.firstMatch(in: line, range: range),
+                  match.numberOfRanges >= 3,
+                  let n = Int(ns.substring(with: match.range(at: 1))) else {
+                return nil
+            }
+            let body = ns.substring(with: match.range(at: 2)).trimmingCharacters(in: .whitespaces)
+            return body.isEmpty ? nil : (n, body)
+        }
+
+        // 查找最长的连续编号列表（允许列表项之间偶发空行）
+        var bestIndices: [Int] = []
+        var i = 0
+        while i < lines.count {
+            if let first = parseNumberedLine(lines[i]), first.number == 1 {
+                var currentIndices = [i]
+                var expected = 2
+                var j = i + 1
+                while j < lines.count {
+                    let trimmed = lines[j].trimmingCharacters(in: .whitespaces)
+                    if trimmed.isEmpty {
+                        // 跳过单一空行探测下一项
+                        if j + 1 < lines.count,
+                           let nextItem = parseNumberedLine(lines[j + 1]),
+                           nextItem.number == expected {
+                            j += 1
+                            continue
+                        }
+                        break
+                    }
+                    if let nextItem = parseNumberedLine(lines[j]), nextItem.number == expected {
+                        currentIndices.append(j)
+                        expected += 1
+                        j += 1
+                    } else {
+                        break
+                    }
+                }
+                if currentIndices.count > bestIndices.count {
+                    bestIndices = currentIndices
+                }
+                i = max(i + 1, j)
+            } else {
+                i += 1
+            }
+        }
+
+        guard bestIndices.count >= 2, let blockStart = bestIndices.first, let blockEnd = bestIndices.last else {
+            return CoachReplyStructure(intro: cleaned, workoutCard: nil, outro: "")
+        }
+
+        let bodies: [String] = bestIndices.compactMap { parseNumberedLine(lines[$0])?.body }
+        let doseHitCount = bodies.filter { body in
+            guard let regex = doseRegex else { return false }
+            return regex.firstMatch(in: body, range: NSRange(location: 0, length: (body as NSString).length)) != nil
+        }.count
+
+        guard doseHitCount >= 2 else {
+            return CoachReplyStructure(intro: cleaned, workoutCard: nil, outro: "")
+        }
+
+        let intro = lines[..<blockStart]
+            .joined(separator: "\n")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let outro = lines[(blockEnd + 1)...]
+            .joined(separator: "\n")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        let cardTitle = extractWorkoutCardTitle(from: intro)
+        let rounds = extractRounds(from: intro)
+        let restText = extractRestSummary(from: intro)
+        var metaParts = ["\(bodies.count) 动作", "\(rounds) 轮"]
+        if let restText { metaParts.append("歇 \(restText)") }
+
+        let items = bodies.enumerated().map { idx, body in
+            parseWorkoutItem(index: idx + 1, body: body, doseRegex: doseRegex)
+        }
+
+        let card = ParsedWorkoutCard(
+            title: cardTitle,
+            metaSummary: metaParts.joined(separator: " · "),
+            rounds: rounds,
+            items: items
+        )
+        return CoachReplyStructure(intro: intro, workoutCard: card, outro: outro)
+    }
+
+    nonisolated private static func extractWorkoutCardTitle(from intro: String) -> String {
+        let candidateLine = intro
+            .components(separatedBy: "\n")
+            .last(where: { !$0.trimmingCharacters(in: .whitespaces).isEmpty }) ?? intro
+        guard let regex = try? NSRegularExpression(
+            pattern: "([^\\n，,。：:（()）]{2,24}?(?:循环方案|全身循环|训练方案|居家方案|训练计划|周练计划|课表|分化方案))"
+        ) else {
+            return "教练推荐训练方案"
+        }
+        let ns = candidateLine as NSString
+        guard let match = regex.firstMatch(in: candidateLine, range: NSRange(location: 0, length: ns.length)) else {
+            return "教练推荐训练方案"
+        }
+        var rawTitle = ns.substring(with: match.range(at: 1)).trimmingCharacters(in: .whitespacesAndNewlines)
+        let leadPrefixes = [
+            "我给你准备了一套", "我为你准备了一套", "给你准备了一套", "为你准备了一套",
+            "给你安排了一套", "为你安排了一套", "准备了一套", "安排了一套",
+            "推荐一套", "这套", "一套", "这份", "今日"
+        ]
+        for prefix in leadPrefixes where rawTitle.hasPrefix(prefix) {
+            rawTitle = String(rawTitle.dropFirst(prefix.count)).trimmingCharacters(in: .whitespaces)
+        }
+        if rawTitle.count > 18 {
+            rawTitle = rawTitle.replacingOccurrences(of: "高效", with: "")
+                .replacingOccurrences(of: "方案", with: "")
+        }
+        return rawTitle.isEmpty ? "教练推荐训练方案" : rawTitle
+    }
+
+    nonisolated private static func extractRounds(from intro: String) -> Int {
+        guard let regex = try? NSRegularExpression(pattern: "(\\d+)\\s*[轮组]") else { return 3 }
+        let ns = intro as NSString
+        guard let match = regex.firstMatch(in: intro, range: NSRange(location: 0, length: ns.length)),
+              let val = Int(ns.substring(with: match.range(at: 1))) else {
+            return 3
+        }
+        return min(max(val, 1), 12)
+    }
+
+    nonisolated private static func extractRestSummary(from intro: String) -> String? {
+        guard let regex = try? NSRegularExpression(pattern: "(?:组间歇|组间休|组间休息|休息|歇)\\s*(\\d+\\s*(?:秒|分钟))") else {
+            return nil
+        }
+        let ns = intro as NSString
+        guard let match = regex.firstMatch(in: intro, range: NSRange(location: 0, length: ns.length)) else {
+            return nil
+        }
+        return ns.substring(with: match.range(at: 1)).trimmingCharacters(in: .whitespaces)
+    }
+
+    nonisolated private static func parseWorkoutItem(
+        index: Int,
+        body: String,
+        doseRegex: NSRegularExpression?
+    ) -> ParsedWorkoutItem {
+        let trimPunctuation = CharacterSet(charactersIn: "。，,;；、:： ").union(.whitespacesAndNewlines)
+        var working = body
+        var dose = ""
+        var afterDose = ""
+
+        if let regex = doseRegex {
+            let ns = body as NSString
+            let matches = regex.matches(in: body, range: NSRange(location: 0, length: ns.length))
+            if let last = matches.last {
+                dose = ns.substring(with: last.range).trimmingCharacters(in: .whitespaces)
+                let prefix = ns.substring(to: last.range.location)
+                let suffix = ns.substring(from: last.range.location + last.range.length)
+                working = prefix.trimmingCharacters(in: trimPunctuation)
+                afterDose = suffix.trimmingCharacters(in: trimPunctuation)
+            }
+        }
+
+        var regionPrefix = ""
+        var corePart = working
+        if let colonIndex = working.firstIndex(where: { $0 == "：" || $0 == ":" }) {
+            regionPrefix = String(working[..<colonIndex]).trimmingCharacters(in: .whitespaces)
+            corePart = String(working[working.index(after: colonIndex)...]).trimmingCharacters(in: .whitespaces)
+        }
+
+        var parenNote = ""
+        if let parenRegex = try? NSRegularExpression(pattern: "（([^）]+)）|\\(([^)]+)\\)") {
+            let nsCore = corePart as NSString
+            let pMatches = parenRegex.matches(in: corePart, range: NSRange(location: 0, length: nsCore.length))
+            if let firstParen = pMatches.first {
+                let g1Range = firstParen.range(at: 1)
+                let g2Range = firstParen.range(at: 2)
+                if g1Range.location != NSNotFound {
+                    parenNote = nsCore.substring(with: g1Range).trimmingCharacters(in: .whitespaces)
+                } else if g2Range.location != NSNotFound {
+                    parenNote = nsCore.substring(with: g2Range).trimmingCharacters(in: .whitespaces)
+                }
+                corePart = parenRegex.stringByReplacingMatches(
+                    in: corePart,
+                    range: NSRange(location: 0, length: nsCore.length),
+                    withTemplate: ""
+                ).trimmingCharacters(in: trimPunctuation)
+            }
+        }
+
+        let title = corePart.isEmpty ? (regionPrefix.isEmpty ? body : regionPrefix) : corePart
+        var subParts: [String] = []
+        if !regionPrefix.isEmpty && regionPrefix != title {
+            subParts.append(regionPrefix)
+        }
+        if !parenNote.isEmpty {
+            subParts.append(parenNote)
+        } else if !afterDose.isEmpty && afterDose.count <= 18 {
+            subParts.append(afterDose)
+        }
+
+        return ParsedWorkoutItem(
+            id: index,
+            title: title,
+            subtitle: subParts.joined(separator: " · "),
+            dose: dose
+        )
+    }
+}
+
+struct ParsedWorkoutItem: Identifiable, Equatable, Hashable, Sendable {
+    let id: Int
+    let title: String
+    let subtitle: String
+    let dose: String
+}
+
+struct ParsedWorkoutCard: Equatable, Hashable, Sendable {
+    let title: String
+    let metaSummary: String
+    let rounds: Int
+    let items: [ParsedWorkoutItem]
+
+    /// 转为 Stride 原生单日计划，供一键写入今日训练计划。
+    func toPlannedDay(weekday: Int) -> PlannedDay {
+        PlannedDay(
+            weekday: weekday,
+            title: title,
+            focus: nil,
+            exercises: items.map {
+                PlannedExercise(
+                    name: $0.title,
+                    sets: max(1, rounds),
+                    reps: $0.dose.isEmpty ? "10-12 次" : $0.dose,
+                    note: $0.subtitle
+                )
+            },
+            rest: false
+        )
+    }
+}
+
+struct CoachReplyStructure: Equatable, Sendable {
+    let intro: String
+    let workoutCard: ParsedWorkoutCard?
+    let outro: String
 }

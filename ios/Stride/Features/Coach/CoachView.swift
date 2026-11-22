@@ -10,6 +10,8 @@ struct CoachView: View {
     @State private var activeTask: Task<Void, Never>?
     @State private var replyToken = 0
     @State private var appliedPlanTurnIDs: Set<UUID> = []
+    @State private var appliedWorkoutTurnIDs: Set<UUID> = []
+    @State private var showQuickPrompts = false
     @State private var toast: String?
 
     private var messages: [ChatTurn] { store.state.chats }
@@ -66,11 +68,15 @@ struct CoachView: View {
                         }
                     }
                 }
+                if showQuickPrompts {
+                    quickPromptsTray
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
                 composer
             }
+            .animation(.spring(response: 0.28, dampingFraction: 0.85), value: showQuickPrompts)
         }
-        .navigationTitle("教练")
-        .navigationBarTitleDisplayMode(.inline)
+        .toolbar(.hidden, for: .navigationBar)
         .sensoryFeedback(.success, trigger: replyToken)
         .onDisappear { activeTask?.cancel() }
         .toast($toast)
@@ -81,34 +87,29 @@ struct CoachView: View {
     private var header: some View {
         HStack(spacing: 10) {
             ZStack {
-                Circle().fill(Palette.purple.opacity(0.16)).frame(width: 38, height: 38)
+                Circle().fill(Palette.purple.opacity(0.16)).frame(width: 32, height: 32)
                 Image(systemName: "sparkles")
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(.system(size: 13.5, weight: .semibold))
                     .foregroundStyle(Palette.purple)
                     .symbolEffect(.pulse, isActive: sending)
             }
-            VStack(alignment: .leading, spacing: 2) {
-                Text(ai.isConfigured ? "AI 教练 · Gemini" : "AI 教练 · 专业知识库")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(Palette.text)
-                Text(ai.isConfigured ? "Gemini + 专业健身知识库已就绪" : "本机专业健身知识库引擎已就绪")
-                    .font(.system(size: 11))
-                    .foregroundStyle(Palette.textFaint)
-                    .lineLimit(1)
-            }
+            Text(ai.isConfigured ? "AI 教练" : "AI 教练 · 本地")
+                .font(.system(size: 15.5, weight: .semibold))
+                .foregroundStyle(Palette.text)
             Spacer()
-            VStack(alignment: .trailing, spacing: 1) {
+            HStack(spacing: 3) {
+                Text("余")
                 Text("\(remaining)")
-                    .font(.system(size: 15, weight: .bold, design: .rounded))
+                    .font(.system(size: 13, weight: .bold, design: .rounded))
                     .foregroundStyle(Palette.green)
                     .numericRoll(value: remaining, countsDown: true)
-                Text("剩余")
-                    .font(.system(size: 9))
-                    .foregroundStyle(Palette.textFaint)
+                Text("次")
             }
+            .font(.system(size: 12))
+            .foregroundStyle(Palette.textFaint)
         }
+        .frame(height: 50)
         .padding(.horizontal, Metrics.page)
-        .padding(.vertical, 10)
         .background(Palette.bg)
         .overlay(Rectangle().fill(Palette.stroke).frame(height: 0.5), alignment: .bottom)
     }
@@ -149,53 +150,175 @@ struct CoachView: View {
         ]
     }
 
-    // MARK: - 气泡
+    // MARK: - 气泡与内嵌方案卡片
 
     private func bubble(_ turn: ChatTurn) -> some View {
-        let displayText = turn.role == .coach
-            ? CoachEngine.sanitizePlainText(turn.text)
-            : turn.text
+        let parsed = turn.role == .coach
+            ? CoachEngine.parseStructuredReply(turn.text)
+            : nil
+        let showsFullWidthCard = turn.attachedPlan != nil || parsed?.workoutCard != nil
 
         return HStack {
             if turn.role == .user { Spacer(minLength: 44) }
 
-            VStack(alignment: .leading, spacing: 8) {
-                Text(displayText)
-                    .font(.system(size: 14.5))
-                    .foregroundStyle(turn.role == .user ? Color.black : Palette.text)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 11)
-                    .background(
-                        RoundedRectangle(cornerRadius: 18, style: .continuous)
-                            .fill(turn.role == .user ? Color.white : Palette.card)
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 18, style: .continuous)
-                            .strokeBorder(turn.role == .user ? .clear : Palette.stroke, lineWidth: 1)
-                    )
-                    .textSelection(.enabled)
-                    .contextMenu {
-                        Button {
-                            UIPasteboard.general.string = displayText
-                            toast = "已复制"
-                        } label: {
-                            Label("复制内容", systemImage: "doc.on.doc")
-                        }
-                        if turn.role == .user {
-                            Button {
-                                triggerSend(text: turn.text)
-                            } label: {
-                                Label("再问一次", systemImage: "arrow.clockwise")
-                            }
-                        }
-                    }
+            VStack(alignment: .leading, spacing: 10) {
+                if turn.role == .user {
+                    userTextBubble(turn.text)
+                } else if let parsed {
+                    coachStructuredContent(turnID: turn.id, rawText: turn.text, parsed: parsed)
+                }
 
                 if let plan = turn.attachedPlan {
                     planCard(plan, turnID: turn.id)
                 }
             }
 
-            if turn.role == .coach { Spacer(minLength: 44) }
+            if turn.role == .coach && !showsFullWidthCard {
+                Spacer(minLength: 32)
+            }
+        }
+    }
+
+    private func userTextBubble(_ text: String) -> some View {
+        Text(text)
+            .font(.system(size: 14.5))
+            .foregroundStyle(Color.black)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(Color.white))
+            .textSelection(.enabled)
+            .contextMenu {
+                Button {
+                    UIPasteboard.general.string = text
+                    toast = "已复制"
+                } label: {
+                    Label("复制内容", systemImage: "doc.on.doc")
+                }
+                Button {
+                    triggerSend(text: text)
+                } label: {
+                    Label("再问一次", systemImage: "arrow.clockwise")
+                }
+            }
+    }
+
+    @ViewBuilder
+    private func coachStructuredContent(turnID: UUID, rawText: String, parsed: CoachReplyStructure) -> some View {
+        if let card = parsed.workoutCard {
+            if !parsed.intro.isEmpty {
+                coachTextBubble(parsed.intro, copyText: CoachEngine.sanitizePlainText(rawText))
+                    .padding(.trailing, 32)
+            }
+            inlineWorkoutCard(card, turnID: turnID, copyText: CoachEngine.sanitizePlainText(rawText))
+            if !parsed.outro.isEmpty {
+                coachTextBubble(parsed.outro, copyText: CoachEngine.sanitizePlainText(rawText))
+                    .padding(.trailing, 32)
+            }
+        } else {
+            coachTextBubble(
+                parsed.intro.isEmpty ? CoachEngine.sanitizePlainText(rawText) : parsed.intro,
+                copyText: CoachEngine.sanitizePlainText(rawText)
+            )
+        }
+    }
+
+    private func coachTextBubble(_ text: String, copyText: String) -> some View {
+        Text(text)
+            .font(.system(size: 14))
+            .foregroundStyle(Palette.text)
+            .lineSpacing(3)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 11)
+            .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(Palette.card))
+            .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(Palette.stroke, lineWidth: 1))
+            .textSelection(.enabled)
+            .contextMenu {
+                Button {
+                    UIPasteboard.general.string = copyText
+                    toast = "已复制"
+                } label: {
+                    Label("复制内容", systemImage: "doc.on.doc")
+                }
+            }
+    }
+
+    private func inlineWorkoutCard(_ card: ParsedWorkoutCard, turnID: UUID, copyText: String) -> some View {
+        let applied = appliedWorkoutTurnIDs.contains(turnID)
+        return VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                Image(systemName: "calendar.badge.checkmark")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(Palette.green)
+                Text(card.title)
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundStyle(Palette.text)
+                    .lineLimit(1)
+                Spacer(minLength: 6)
+                Text(card.metaSummary)
+                    .font(.system(size: 11.5))
+                    .foregroundStyle(Palette.textDim)
+                    .lineLimit(1)
+            }
+
+            Rectangle()
+                .fill(Palette.stroke)
+                .frame(height: 0.5)
+
+            VStack(alignment: .leading, spacing: 9) {
+                ForEach(card.items) { item in
+                    HStack(alignment: .center, spacing: 10) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("\(item.id). \(item.title)")
+                                .font(.system(size: 13.5, weight: .medium))
+                                .foregroundStyle(Palette.text)
+                            if !item.subtitle.isEmpty {
+                                Text(item.subtitle)
+                                    .font(.system(size: 11))
+                                    .foregroundStyle(Palette.textFaint)
+                            }
+                        }
+                        Spacer(minLength: 8)
+                        if !item.dose.isEmpty {
+                            Text(item.dose)
+                                .font(.system(size: 12.5, weight: .semibold))
+                                .foregroundStyle(Palette.green)
+                        }
+                    }
+                }
+            }
+
+            Button {
+                let weekday = Calendar.current.component(.weekday, from: Date())
+                store.setDayOverride(card.toPlannedDay(weekday: weekday), on: Date())
+                appliedWorkoutTurnIDs.insert(turnID)
+                replyToken += 1
+                toast = "已写入「今日训练计划」"
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: applied ? "checkmark.circle.fill" : "square.and.arrow.down")
+                    Text(applied ? "已写入今日计划" : "一键应用到今日计划")
+                }
+                .font(.system(size: 13.5, weight: .bold))
+                .foregroundStyle(applied ? Palette.green : Color.black)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 11)
+                .background(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(applied ? Palette.green.opacity(0.16) : Palette.green)
+                )
+            }
+            .buttonStyle(.stridePress)
+            .disabled(applied)
+        }
+        .padding(14)
+        .card(radius: 18, fill: Palette.cardSoft, stroke: Palette.green.opacity(0.35))
+        .contextMenu {
+            Button {
+                UIPasteboard.general.string = copyText
+                toast = "已复制"
+            } label: {
+                Label("复制完整回复", systemImage: "doc.on.doc")
+            }
         }
     }
 
@@ -283,10 +406,55 @@ struct CoachView: View {
         }
     }
 
-    // MARK: - 输入
+    // MARK: - 输入与快捷提问
+
+    private var quickPromptsTray: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("快捷提问")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(Palette.textFaint)
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(suggested, id: \.self) { text in
+                        Button {
+                            showQuickPrompts = false
+                            triggerSend(text: text)
+                        } label: {
+                            Text(text)
+                                .font(.system(size: 12.5))
+                                .foregroundStyle(Palette.text)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 8)
+                                .background(Capsule().fill(Palette.cardHigh))
+                                .overlay(Capsule().strokeBorder(Palette.stroke, lineWidth: 1))
+                        }
+                        .buttonStyle(.stridePress)
+                    }
+                }
+            }
+        }
+        .padding(.horizontal, Metrics.page)
+        .padding(.vertical, 10)
+        .background(Palette.surface)
+        .overlay(Rectangle().fill(Palette.stroke).frame(height: 0.5), alignment: .top)
+    }
 
     private var composer: some View {
-        HStack(spacing: 9) {
+        HStack(spacing: 8) {
+            Button {
+                showQuickPrompts.toggle()
+            } label: {
+                Image(systemName: "plus")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(Palette.text)
+                    .rotationEffect(.degrees(showQuickPrompts ? 45 : 0))
+                    .frame(width: 42, height: 42)
+                    .background(Circle().fill(showQuickPrompts ? Palette.cardHigh : Palette.card))
+                    .overlay(Circle().strokeBorder(Palette.stroke, lineWidth: 1))
+            }
+            .buttonStyle(.stridePress)
+            .accessibilityLabel("快捷提问")
+
             TextField("问点具体的，比如「深蹲该加多少」", text: $input, axis: .vertical)
                 .lineLimit(1...4)
                 .textFieldStyle(.plain)
@@ -294,7 +462,7 @@ struct CoachView: View {
                 .foregroundStyle(Palette.text)
                 .padding(.horizontal, 14)
                 .padding(.vertical, 11)
-                .background(RoundedRectangle(cornerRadius: 20, style: .continuous).fill(Palette.card))
+                .background(RoundedRectangle(cornerRadius: 21, style: .continuous).fill(Palette.card))
 
             Button {
                 triggerSend(text: input)
@@ -323,6 +491,7 @@ struct CoachView: View {
             return
         }
 
+        showQuickPrompts = false
         if raw == input { input = "" }
         store.appendChat(ChatTurn(role: .user, text: text))
         sending = true

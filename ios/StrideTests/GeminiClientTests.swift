@@ -263,4 +263,62 @@ final class GeminiClientTests: XCTestCase {
         XCTAssertTrue(cleaned.contains("3×8"))
         XCTAssertTrue(CoachEngine.systemPrompt.contains("严禁使用任何 Markdown"))
     }
+
+    func testParseStructuredReplyExtractsInlineWorkoutCard() {
+        let reply = """
+        下雨天窝在家里，其实正是低成本身体维护的好时机！
+
+        如果你今天想动一动，我给你准备了一套 **20 分钟居家全身循环方案**（无器械，做 4 轮，组间歇 90 秒）：
+
+        1. **上肢胸肩**：标准俯卧撑（或脚搭沙发上斜）10-15 次。
+        2. **下肢核心**：保加利亚分腿蹲（后脚背搭沙发或床沿）每侧 12 次，酸爽度绝对够。
+        3. **背部姿态**：俯身超人背伸（趴地上抬起手脚）15 次。
+        4. **臀腿链条**：单腿臀桥（仰卧单腿蹬地）每侧 12 次。
+        5. **核心收尾**：平板支撑或死虫（Dead Bug）45 秒。
+
+        要是只想舒服一下，做 15 分钟静态拉伸，补足睡眠也是增肌期的一部分。
+        """
+
+        let parsed = CoachEngine.parseStructuredReply(reply)
+        guard let card = parsed.workoutCard else {
+            return XCTFail("预期能识别出结构化训练方案卡片")
+        }
+
+        XCTAssertFalse(parsed.intro.contains("*"))
+        XCTAssertFalse(parsed.outro.contains("*"))
+        XCTAssertTrue(parsed.intro.contains("低成本身体维护"))
+        XCTAssertTrue(parsed.outro.contains("静态拉伸"))
+        XCTAssertEqual(card.rounds, 4)
+        XCTAssertTrue(card.metaSummary.contains("5 动作"))
+        XCTAssertTrue(card.metaSummary.contains("4 轮"))
+        XCTAssertTrue(card.title.contains("居家全身循环"))
+        XCTAssertEqual(card.items.count, 5)
+        XCTAssertEqual(card.items[0].title, "标准俯卧撑")
+        XCTAssertEqual(card.items[0].dose, "10-15 次")
+        XCTAssertEqual(card.items[1].dose, "每侧 12 次")
+        XCTAssertEqual(card.items[4].title, "平板支撑或死虫")
+        XCTAssertEqual(card.items[4].dose, "45 秒")
+
+        let planned = card.toPlannedDay(weekday: 2)
+        XCTAssertEqual(planned.weekday, 2)
+        XCTAssertFalse(planned.rest)
+        XCTAssertEqual(planned.exercises.count, 5)
+        XCTAssertEqual(planned.exercises.first?.sets, 4)
+        XCTAssertEqual(planned.exercises.first?.reps, "10-15 次")
+    }
+
+    func testParseStructuredReplyIgnoresNonWorkoutNumberedLists() {
+        let plainListReply = """
+        减脂期睡眠和饮水建议：
+
+        1. 保持每天 7 到 8 小时规律作息，避免深夜刷手机。
+        2. 优先保证三餐蔬菜与全谷物摄入，少吃高油零食。
+        3. 餐后可以适当散步放松肠胃，减轻心理压力。
+        """
+
+        let parsed = CoachEngine.parseStructuredReply(plainListReply)
+        XCTAssertNil(parsed.workoutCard)
+        XCTAssertTrue(parsed.intro.contains("1. 保持每天"))
+        XCTAssertTrue(parsed.outro.isEmpty)
+    }
 }
