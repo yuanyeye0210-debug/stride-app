@@ -95,11 +95,13 @@ enum CoachEngine {
 
         if config.isConfigured {
             do {
+                let ragNotes = FitnessKnowledgeBase.ragContext(for: text)
+                let ragSection = ragNotes.isEmpty ? "" : "\n\n【步迹专业健身知识库参考（请融合贯通、结合用户记录用人话回复）】\n\(ragNotes)"
                 let enrichedSystem = """
                 \(systemPrompt)
 
                 【用户后台档案与今日实时状态（仅作参考，请结合时间段自然使用）】
-                \(context(store: store))
+                \(context(store: store))\(ragSection)
                 """
                 let historyTurns = store.state.chats.dropLast().suffix(8)
                 var conversation: [AIClient.Message] = historyTurns.map { turn in
@@ -123,26 +125,26 @@ enum CoachEngine {
                 return (answer, true, candidatePlan)
             } catch is CancellationError {
                 let local = localReply(text, store: store)
-                return (local + "\n\n（已切回本机教练即时回复）", false, candidatePlan)
+                return (local + "\n\n（已切回本机专业知识库即时回复）", false, candidatePlan)
             } catch let aiError as AIError {
                 let local = localReply(text, store: store)
                 let note: String
                 switch aiError {
                 case .timeout, .offline:
-                    note = "（当前网络直连 Gemini 超时，已切换为本机教练回复；如需云端大模型请开启外网环境）"
+                    note = "（当前直连云端 Gemini 超时，已使用本机健身知识库为您回复；开启外网可解锁云端自由推演）"
                 default:
-                    note = "（云端教练暂不可用：\(aiError.localizedDescription)，以上为本机分析）"
+                    note = "（云端模型暂忙：\(aiError.localizedDescription)，已使用本机健身知识库回复）"
                 }
                 return (local + "\n\n\(note)", false, candidatePlan)
             } catch {
                 let local = localReply(text, store: store)
-                return (local + "\n\n（云端连接失败：\(error.localizedDescription)，以上为本机分析。）", false, candidatePlan)
+                return (local + "\n\n（云端连接失败：\(error.localizedDescription)，以上为本机知识库解答。）", false, candidatePlan)
             }
         }
         return (localReply(text, store: store), false, candidatePlan)
     }
 
-    // MARK: - 本地规则
+    // MARK: - 本地规则 + 全量健身知识库驱动
 
     static func localReply(_ text: String, store: AppStore) -> String {
         let q = text.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
@@ -152,34 +154,56 @@ enum CoachEngine {
             let n = store.todayNutrition
             let p = store.state.profile
             return """
-            在的，\(p.nickname)！今天计划是「\(todayTitle)」，已摄入 \(Int(n.kcal))/\(p.kcalTarget) kcal、蛋白 \(Int(n.p))g。
-            想问今日动作重量、配餐缺口还是恢复情况，直接告诉我。
+            在的，\(p.nickname)！今天计划是「\(todayTitle)」，已记录 \(Int(n.kcal))/\(p.kcalTarget) kcal、蛋白 \(Int(n.p))g。
+            无论是动作技术瓶颈、减脂配餐、外卖怎么选还是伤病替代，直接问我就行。
             """
         }
 
-        if q.contains("减脂") || q.contains("瘦") || q.contains("刷脂") {
+        if (q.contains("gemini") || q.contains("ai") || q.contains("模型") || q.contains("为什么") || q.contains("怎么"))
+            && (q.contains("超时") || q.contains("连不上") || q.contains("不回") || q.contains("失败") || q.contains("断网")) {
+            return """
+            这是因为 App 需要向海外接口 generativelanguage.googleapis.com 请求 Gemini 大模型，在国内纯 5G/Wi-Fi 无外网环境下数据包会被拦截挂起，超过 12 秒就会自动断线保护不让界面卡死。
+            我已经把完整的循证健身知识库和 1,324 个动作要领内置在本机里，即便不连外网也能随时直接回答你的训练、饮食和伤病问题；开启外网环境后会自动切回云端高速 Gemini 模型。
+            """
+        }
+
+        for name in ["卧推", "深蹲", "硬拉", "划船", "推举", "引体"] where q.contains(name) {
+            let base = exerciseAdvice(name: name, store: store)
+            let rag = FitnessKnowledgeBase.retrieve(for: text, limit: 1)
+            if let tip = rag.first {
+                return "\(base)\n\n【\(tip.title)】\(tip.content)"
+            }
+            return base
+        }
+
+        if q.contains("今天") || q.contains("练什么") {
+            if let day = store.todaysPlannedDay {
+                let list = day.exercises.prefix(4).map { "\($0.name) \($0.sets)×\($0.reps)" }.joined(separator: "，")
+                return "今天计划是「\(day.title)」：\(list)。组间休息 90 秒，主动作可放到 150 秒。"
+            }
+            return "今天暂无固定安排。推荐要么做 20 分钟 Zone 2 快走 + 关节活动度，要么开一节推/拉/腿自选训练。"
+        }
+
+        // 优先从本机 24 条专业运动科学知识库 + 1,324 动作库做 RAG 检索回答
+        let matchedKnowledge = FitnessKnowledgeBase.retrieve(for: text, limit: 2)
+        let matchedExercises = Array(ExerciseCatalogStore.shared.filter(query: text, bodyPart: nil, equipment: nil).prefix(1))
+
+        if !matchedKnowledge.isEmpty {
             let p = store.state.profile
-            let n = store.todayNutrition
-            return """
-            减脂核心守住热量缺口与高蛋白：目标 \(p.kcalTarget) kcal / 蛋白 \(p.proteinTarget)g，今日还剩 \(max(0, p.kcalTarget - Int(n.kcal))) kcal。
-            力量训练维持大重量复合动作不掉肌肉，每周额外加 2–3 次 25 分钟中低强度有氧。
-            """
+            var parts = matchedKnowledge.map { "【\($0.title)】\n\($0.content)" }
+            if !p.injuryAvoidAreas.isEmpty {
+                parts.append("（已记录你的重点规避部位：\(p.injuryAvoidAreas.joined(separator: "、"))，实操时如遇关节不适请果断降重或换用无痛替代。）")
+            }
+            if let ex = matchedExercises.first {
+                let stepTip = ex.steps.prefix(2).joined(separator: " ")
+                parts.append("参考动作「\(ex.displayTitle)」：\(stepTip)")
+            }
+            return parts.joined(separator: "\n\n")
         }
 
-        if q.contains("增肌") || q.contains("增重") || q.contains("维度") {
-            let p = store.state.profile
-            return """
-            增肌优先保证每周渐进超负荷：主项每 1–2 周尝试多推 1 次或加 2.5kg。
-            蛋白守住 \(p.proteinTarget)g/天，练后 2 小时内补足碳水与优质蛋白，睡眠确保 7 小时以上。
-            """
-        }
-
-        if q.contains("痛") || q.contains("疼") || q.contains("伤") {
-            return """
-            先分清两件事：关节的锐痛 → 今天换动作，别硬顶；肌肉的酸胀 → 可以练但降 20% 负荷。
-            替代方案：卧推痛肩 → 改哑铃中立握或器械推；深蹲痛膝 → 改箱式深蹲，控制下放深度。
-            连续 3 天不缓解就去看看，别在 App 里赌。
-            """
+        if let ex = matchedExercises.first {
+            let stepTip = ex.steps.prefix(3).joined(separator: " ")
+            return "动作库为你匹配到「\(ex.displayTitle)」（目标肌群：\(ex.targetZH)，器械：\(ex.equipmentZH)）。\n动作要领：\(stepTip)"
         }
 
         if q.contains("睡") || q.contains("累") || q.contains("疲") || q.contains("没劲") {
@@ -199,32 +223,18 @@ enum CoachEngine {
             """
         }
 
-        for name in ["卧推", "深蹲", "硬拉", "划船", "推举", "引体"] {
-            if q.contains(name) {
-                return exerciseAdvice(name: name, store: store)
-            }
-        }
-
-        if q.contains("今天") || q.contains("练什么") {
-            if let day = store.todaysPlannedDay {
-                let list = day.exercises.prefix(4).map { "\($0.name) \($0.sets)×\($0.reps)" }.joined(separator: "，")
-                return "今天计划是「\(day.title)」：\(list)。组间休息 90 秒，主动作可以放到 150 秒。"
-            }
-            return "今天没有排训练。要么做 20 分钟快走 + 活动度，要么直接把明天的计划提前——别连着两天全休。"
-        }
-
         if q.contains("吃") || q.contains("热量") || q.contains("蛋白") {
             let n = store.todayNutrition
             let p = store.state.profile
             let left = max(0, p.kcalTarget - Int(n.kcal))
             let proteinLeft = max(0, p.proteinTarget - Int(n.p))
             return """
-            今天已摄入 \(Int(n.kcal)) kcal，还剩 \(left) kcal；蛋白差 \(proteinLeft)g。
-            补法：\(proteinLeft)g 蛋白 ≈ \(Int(Double(proteinLeft) / 0.22))g 鸡胸，或 3 勺乳清。
+            今天已摄入 \(Int(n.kcal)) kcal，还剩 \(left) kcal；蛋白还差 \(proteinLeft)g。
+            补法：\(proteinLeft)g 蛋白 ≈ \(Int(Double(proteinLeft) / 0.22))g 鸡胸，或 2–3 勺乳清蛋白粉。
             """
         }
 
-        // 默认：给本周总结
+        // 未命中任何专题时再给本周训练概览与可提问指引
         let week = store.weekSessions
         let sets = week.reduce(0) { $0 + $1.totalSets }
         let vol = week.reduce(0) { $0 + $1.totalVolume }
@@ -232,9 +242,11 @@ enum CoachEngine {
         let weakest = balance.min { $0.value < $1.value }?.key.rawValue ?? "腿"
 
         return """
-        本周 \(week.count) 练、\(sets) 组、总容量 \(Int(vol)) kg。
-        组数最少的部位是\(weakest)，下次训练优先补上。
-        想问具体动作就把重量和次数丢给我，比如「卧推 62.5 做了 8 次」。
+        本周目前 \(week.count) 练、\(sets) 组、总容量 \(Int(vol)) kg（可关注弱项：\(weakest)）。
+        你可以直接问我具体训练或饮食问题，例如：
+        ·「卧推卡在70kg上不去怎么办」
+        ·「肩痛或腰酸怎么替代练胸练背」
+        ·「减脂期外卖火锅怎么吃、肌酸怎么补」
         """
     }
 

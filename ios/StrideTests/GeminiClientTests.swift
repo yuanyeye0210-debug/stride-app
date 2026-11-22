@@ -7,8 +7,8 @@ final class GeminiClientTests: XCTestCase {
         let config = AIConfig()
         XCTAssertEqual(config.provider, .gemini)
         XCTAssertEqual(config.baseURL, "https://generativelanguage.googleapis.com/v1beta")
-        XCTAssertEqual(config.chatModel, "gemini-flash-latest")
-        XCTAssertEqual(config.visionModel, "gemini-flash-latest")
+        XCTAssertEqual(config.chatModel, "gemini-3.5-flash-lite")
+        XCTAssertEqual(config.visionModel, "gemini-3.5-flash")
         XCTAssertFalse(config.isConfigured)
     }
 
@@ -17,14 +17,31 @@ final class GeminiClientTests: XCTestCase {
         XCTAssertEqual(CoachEngine.useCase(for: "帮我分析一下最近四周分化训练周期与瓶颈"), .coachDeepAnalysis)
 
         let chatChain = AIClient.geminiModelCandidates(primary: "", useCase: .coachChat)
-        XCTAssertEqual(chatChain, ["gemini-flash-latest", "gemini-3.8-flash", "gemini-flash-lite-latest"])
+        XCTAssertEqual(chatChain, ["gemini-3.5-flash-lite", "gemini-flash-lite-latest", "gemini-3.1-flash-lite", "gemini-3.6-flash"])
 
         let deepChain = AIClient.geminiModelCandidates(primary: "", useCase: .coachDeepAnalysis)
-        XCTAssertEqual(deepChain.first, "gemini-pro-latest")
+        XCTAssertEqual(deepChain.first, "gemini-3.6-flash")
         XCTAssertTrue(deepChain.contains("gemini-flash-lite-latest"))
 
         let visionChain = AIClient.geminiModelCandidates(primary: "", useCase: .foodVision)
-        XCTAssertEqual(visionChain, ["gemini-flash-latest", "gemini-3.8-flash", "gemini-flash-lite-latest"])
+        XCTAssertEqual(visionChain, ["gemini-3.5-flash", "gemini-3.6-flash", "gemini-3.5-flash-lite", "gemini-flash-lite-latest"])
+    }
+
+    func testFitnessKnowledgeBaseRAGAndLocalCoach() {
+        XCTAssertGreaterThanOrEqual(FitnessKnowledgeBase.entries.count, 20)
+
+        let benchHits = FitnessKnowledgeBase.retrieve(for: "卧推卡在70kg上不去怎么办")
+        XCTAssertFalse(benchHits.isEmpty)
+        XCTAssertTrue(benchHits.contains(where: { $0.id == "bench_press" || $0.id == "double_progression" }))
+
+        let shoulderHits = FitnessKnowledgeBase.retrieve(for: "肩痛卧推怎么办")
+        XCTAssertTrue(shoulderHits.contains(where: { $0.id == "shoulder_rehab" }))
+
+        let dietHits = FitnessKnowledgeBase.retrieve(for: "减脂外卖怎么吃")
+        XCTAssertTrue(dietHits.contains(where: { $0.id == "eating_out" || $0.id == "fat_loss_nutrition" }))
+
+        let rag = FitnessKnowledgeBase.ragContext(for: "深蹲怎么练")
+        XCTAssertFalse(rag.isEmpty)
     }
 
     func testLegacyJSONWithoutProviderDecodesBackwardCompatibly() throws {
@@ -212,7 +229,7 @@ final class GeminiClientTests: XCTestCase {
         config.switchProvider(to: .gemini)
         XCTAssertEqual(config.provider, .gemini)
         XCTAssertEqual(config.baseURL, "https://generativelanguage.googleapis.com/v1beta")
-        XCTAssertEqual(config.chatModel, "gemini-flash-latest")
-        XCTAssertEqual(config.visionModel, "gemini-flash-latest")
+        XCTAssertEqual(config.chatModel, "gemini-3.5-flash-lite")
+        XCTAssertEqual(config.visionModel, "gemini-3.5-flash")
     }
 }

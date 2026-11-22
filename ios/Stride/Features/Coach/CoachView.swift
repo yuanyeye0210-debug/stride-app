@@ -88,10 +88,10 @@ struct CoachView: View {
                     .symbolEffect(.pulse, isActive: sending)
             }
             VStack(alignment: .leading, spacing: 2) {
-                Text(ai.isConfigured ? "AI 教练 · Gemini" : "AI 教练 · 本地模式")
+                Text(ai.isConfigured ? "AI 教练 · Gemini" : "AI 教练 · 专业知识库")
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(Palette.text)
-                Text(ai.isConfigured ? "已自动匹配 Gemini 教练与分析模型" : "当前离线，自动使用本机教练引擎")
+                Text(ai.isConfigured ? "Gemini + 专业健身知识库已就绪" : "本机专业健身知识库引擎已就绪")
                     .font(.system(size: 11))
                     .foregroundStyle(Palette.textFaint)
                     .lineLimit(1)

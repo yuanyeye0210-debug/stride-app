@@ -34,14 +34,14 @@ enum AIProvider: String, Codable, CaseIterable, Hashable, Identifiable {
 
     var defaultChatModel: String {
         switch self {
-        case .gemini: return "gemini-flash-latest"
+        case .gemini: return "gemini-3.5-flash-lite"
         case .openAICompatible: return "gpt-4o-mini"
         }
     }
 
     var defaultVisionModel: String {
         switch self {
-        case .gemini: return "gemini-flash-latest"
+        case .gemini: return "gemini-3.5-flash"
         case .openAICompatible: return "gpt-4o-mini"
         }
     }
@@ -53,15 +53,15 @@ enum AIUseCase: Equatable {
     case coachDeepAnalysis
     case foodVision
 
-    /// 返回优先尝试到保底兜底的模型序列（遇到模型下线 404、限流 429 或超时时自动顺延）。
+    /// 返回优先尝试到保底兜底的模型序列（按实测延迟与可用性排序；遇到限流/不可用/超时自动顺延）。
     var geminiModelChain: [String] {
         switch self {
         case .coachChat:
-            return ["gemini-flash-latest", "gemini-3.8-flash", "gemini-flash-lite-latest"]
+            return ["gemini-3.5-flash-lite", "gemini-flash-lite-latest", "gemini-3.1-flash-lite", "gemini-3.6-flash"]
         case .coachDeepAnalysis:
-            return ["gemini-pro-latest", "gemini-flash-latest", "gemini-flash-lite-latest"]
+            return ["gemini-3.6-flash", "gemini-3-flash-preview", "gemini-3.5-flash-lite", "gemini-flash-lite-latest"]
         case .foodVision:
-            return ["gemini-flash-latest", "gemini-3.8-flash", "gemini-flash-lite-latest"]
+            return ["gemini-3.5-flash", "gemini-3.6-flash", "gemini-3.5-flash-lite", "gemini-flash-lite-latest"]
         }
     }
 
@@ -412,8 +412,8 @@ struct AIClient {
 
     /// Gemini 2.5 / 3 思考模型在输出正文前会占用内部推理预算，确保 maxOutputTokens 留有充足余量避免空回。
     static let geminiMinimumMaxOutputTokens = 2048
-    /// Gemini 原生请求单次快速超时，防止国内无代理直连时长时间卡死。
-    static let geminiTimeoutInterval: TimeInterval = 10
+    /// Gemini 原生请求单次快速超时（12 秒兼顾蜂窝延迟与防卡死）。
+    static let geminiTimeoutInterval: TimeInterval = 12
 
     struct Message: Encodable {
         let role: String
@@ -904,15 +904,22 @@ struct AIClient {
         onRetry: (@MainActor (Int) -> Void)? = nil
     ) async throws -> String {
         var lastError: Error = AIError.badResponse("无可用 Gemini 模型")
+        var timeoutCount = 0
         for (index, model) in candidates.enumerated() {
             do {
                 return try await sendGeminiOnce(body, model: model, config: config)
             } catch is CancellationError {
                 throw CancellationError()
+            } catch let error as AIError where error == .offline {
+                // 确认无网络时不继续尝试，立刻回落本地健身知识库引擎
+                throw error
             } catch let error as AIError where shouldFallbackModel(error) && index < candidates.count - 1 {
-                // 若是整条网络通道不可达（超时或断网），不继续串行干等剩余模型，直接快速回落本地引擎。
-                if error == .timeout || error == .offline {
-                    throw error
+                if error == .timeout {
+                    timeoutCount += 1
+                    // 单个模型偶发排队超时时顺延切换下一个高速模型；若连续 2 次均超时再判定通道受阻
+                    if timeoutCount >= 2 {
+                        throw error
+                    }
                 }
                 lastError = error
                 await MainActor.run { onRetry?(index + 2) }
