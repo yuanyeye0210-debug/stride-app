@@ -232,4 +232,35 @@ final class GeminiClientTests: XCTestCase {
         XCTAssertEqual(config.chatModel, "gemini-3.5-flash-lite")
         XCTAssertEqual(config.visionModel, "gemini-3.5-flash")
     }
+
+    func testSanitizePlainTextStripsAllMarkdownSymbols() {
+        let raw = """
+        ### 今日居家方案
+        > 注意热身与呼吸
+
+        我给你准备了一套 **20分钟居家全身高效循环方案**：
+        1. **上肢胸肩**：标准俯卧撑 `10-15` 次
+        - **深度拉伸/泡沫轴**：参考 [拉伸指南](https://example.com/stretch)
+        * *轻度放松* __补足睡眠__ ~~硬扛~~
+        ---
+        ```text
+        3*8
+        ```
+        """
+
+        let cleaned = CoachEngine.sanitizePlainText(raw)
+        XCTAssertFalse(cleaned.contains("*"))
+        XCTAssertFalse(cleaned.contains("#"))
+        XCTAssertFalse(cleaned.contains("`"))
+        XCTAssertFalse(cleaned.contains("_"))
+        XCTAssertFalse(cleaned.contains("~~"))
+        XCTAssertFalse(cleaned.contains("]("))
+        XCTAssertTrue(cleaned.contains("今日居家方案"))
+        XCTAssertTrue(cleaned.contains("20分钟居家全身高效循环方案："))
+        XCTAssertTrue(cleaned.contains("1. 上肢胸肩：标准俯卧撑 10-15 次"))
+        XCTAssertTrue(cleaned.contains("· 深度拉伸/泡沫轴：参考 拉伸指南"))
+        XCTAssertTrue(cleaned.contains("· 轻度放松 补足睡眠 硬扛"))
+        XCTAssertTrue(cleaned.contains("3×8"))
+        XCTAssertTrue(CoachEngine.systemPrompt.contains("严禁使用任何 Markdown"))
+    }
 }

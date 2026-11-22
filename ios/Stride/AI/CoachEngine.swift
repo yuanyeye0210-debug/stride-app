@@ -5,13 +5,14 @@ import Foundation
 @MainActor
 enum CoachEngine {
 
-    static let systemPrompt = """
+    nonisolated static let systemPrompt = """
     你是「步迹 Stride」的私人力量与体能教练，用简体中文与用户自然交流，风格专业、真诚、有温度、像真私教一样懂人话。
     规则：
     1. 若用户只是打招呼（如“你好”“在吗”“早”）、闲聊或表达情绪，请自然友好回应并简要引导今天可以聊什么，不要生硬罗列数字或强行下命令。
     2. 后台状态里的今日摄入或训练如果为 0，先结合当前时间段判断（例如凌晨/上午尚未记录或还没吃早饭是正常的），切勿在对方只打招呼时误判为空腹异常或命令对方“马上吃几千大卡”。
     3. 当用户询问具体训练、配重、饮食缺口、伤病替代或恢复问题时，才结合后台真实记录给出科学、可落地的建议（尽量给出动作、重量、组次或替代方案），不要编造不存在的记录。
     4. 结合上下文连续对话，表达清晰简洁（日常问答 40–180 字即可，复杂规划可分点说明）。
+    5. 严禁使用任何 Markdown 语法或符号（禁止 **、*、#、`、__、~~、>、---、[]() 以及以 - 或 * 开头的列表）；只使用纯文字、空行分段、普通数字序号（如“1. ”）或中文圆点“· ”来排版，确保直接可读。
     """
 
     static func context(store: AppStore) -> String {
@@ -122,7 +123,7 @@ enum CoachEngine {
                     maxTokens: 900,
                     onRetry: onRetry
                 )
-                return (answer, true, candidatePlan)
+                return (sanitizePlainText(answer), true, candidatePlan)
             } catch is CancellationError {
                 let local = localReply(text, store: store)
                 return (local + "\n\n（已切回本机专业知识库即时回复）", false, candidatePlan)
@@ -283,5 +284,48 @@ enum CoachEngine {
         let f = DateFormatter()
         f.dateFormat = "M/d"
         return f.string(from: d)
+    }
+
+    /// 彻底剥离大模型可能附带的 Markdown 语法符号，保留整洁的纯文本分段排版。
+    nonisolated static func sanitizePlainText(_ raw: String) -> String {
+        var text = raw
+            .replacingOccurrences(of: "\r\n", with: "\n")
+            .replacingOccurrences(of: "\r", with: "\n")
+
+        func replaceRegex(_ pattern: String, with template: String, in source: String) -> String {
+            guard let regex = try? NSRegularExpression(pattern: pattern) else { return source }
+            let range = NSRange(source.startIndex..., in: source)
+            return regex.stringByReplacingMatches(in: source, range: range, withTemplate: template)
+        }
+
+        // 1. 移除代码块围栏行
+        text = replaceRegex("(?m)^\\s*```[^\\n]*$", with: "", in: text)
+        // 2. 图片与链接只保留可读标签文字：[标题](url) -> 标题
+        text = replaceRegex("!\\[([^\\]]*)\\]\\([^)]+\\)", with: "$1", in: text)
+        text = replaceRegex("\\[([^\\]]+)\\]\\([^)]+\\)", with: "$1", in: text)
+        // 3. 移除独立分割线（--- / *** / ___）
+        text = replaceRegex("(?m)^\\s*([-*_])\\s*\\1\\s*\\1[\\s\\-*_]*$", with: "", in: text)
+        // 4. 移除标题前缀（### ）与尾部装饰 #
+        text = replaceRegex("(?m)^\\s*#{1,6}\\s*", with: "", in: text)
+        text = replaceRegex("(?m)\\s+#+\\s*$", with: "", in: text)
+        // 5. 移除引用块前缀（> ）
+        text = replaceRegex("(?m)^\\s*>+\\s?", with: "", in: text)
+        // 6. 将行首无序列表符号转为中文圆点“· ”
+        text = replaceRegex("(?m)^\\s*[-*+•]\\s+", with: "· ", in: text)
+        // 7. 将数字间的乘号 * 规范化为 ×（如 3*8 -> 3×8），避免与斜体/加粗混杂
+        text = replaceRegex("(?<=\\d)\\s*\\*\\s*(?=\\d)", with: "×", in: text)
+        // 8. 清除剩余 Markdown 行内符号（加粗、斜体、下划线、删除线、反引号）
+        text = text
+            .replacingOccurrences(of: "~~", with: "")
+            .replacingOccurrences(of: "**", with: "")
+            .replacingOccurrences(of: "__", with: "")
+            .replacingOccurrences(of: "*", with: "")
+            .replacingOccurrences(of: "_", with: "")
+            .replacingOccurrences(of: "`", with: "")
+        // 9. 清理行尾空格与多余空行
+        text = replaceRegex("(?m)[ \\t]+$", with: "", in: text)
+        text = replaceRegex("\\n{3,}", with: "\n\n", in: text)
+
+        return text.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 }

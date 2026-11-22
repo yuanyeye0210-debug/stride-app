@@ -152,11 +152,15 @@ struct CoachView: View {
     // MARK: - 气泡
 
     private func bubble(_ turn: ChatTurn) -> some View {
-        HStack {
+        let displayText = turn.role == .coach
+            ? CoachEngine.sanitizePlainText(turn.text)
+            : turn.text
+
+        return HStack {
             if turn.role == .user { Spacer(minLength: 44) }
 
             VStack(alignment: .leading, spacing: 8) {
-                Text(turn.text)
+                Text(displayText)
                     .font(.system(size: 14.5))
                     .foregroundStyle(turn.role == .user ? Color.black : Palette.text)
                     .padding(.horizontal, 14)
@@ -172,7 +176,7 @@ struct CoachView: View {
                     .textSelection(.enabled)
                     .contextMenu {
                         Button {
-                            UIPasteboard.general.string = turn.text
+                            UIPasteboard.general.string = displayText
                             toast = "已复制"
                         } label: {
                             Label("复制内容", systemImage: "doc.on.doc")
