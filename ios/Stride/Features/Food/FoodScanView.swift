@@ -360,7 +360,7 @@ struct FoodScanView: View {
                             .font(.system(size: 15))
                             .foregroundStyle(Palette.textFaint)
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.stridePress)
                 }
                 .padding(.vertical, 4)
             }
@@ -374,6 +374,7 @@ struct FoodScanView: View {
         }
         .padding(16)
         .card(radius: 22, fill: Palette.card, stroke: Palette.stroke)
+        .sensoryFeedback(.impact(weight: .light), trigger: items.count)
     }
 
     private func macro(_ title: String, _ value: Double, _ color: Color) -> some View {
@@ -382,6 +383,7 @@ struct FoodScanView: View {
             Text("\(Int(value)) g")
                 .font(.system(size: 13, weight: .bold, design: .rounded))
                 .foregroundStyle(color)
+                .numericRoll(value: Int(value))
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -399,9 +401,10 @@ struct FoodScanView: View {
                         .padding(.vertical, 9)
                         .background(Capsule().fill(meal == m ? Color.white : Palette.card))
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.stridePress)
             }
         }
+        .sensoryFeedback(.selection, trigger: meal)
     }
 
     // MARK: - 手动
@@ -440,7 +443,7 @@ struct FoodScanView: View {
                     }
                     .padding(.vertical, 6)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.strideRow(radius: 10))
             }
         }
         .padding(16)
@@ -456,6 +459,7 @@ struct FoodScanView: View {
             Text(items.isEmpty ? "还没有食物" : "保存 \(Int(totalKcal)) kcal")
                 .font(.system(size: 16, weight: .bold))
                 .foregroundStyle(items.isEmpty ? Palette.textDim : Color.black)
+                .numericRoll(value: Int(totalKcal))
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 16)
                 .background(
@@ -463,7 +467,7 @@ struct FoodScanView: View {
                         .fill(items.isEmpty ? Palette.cardHigh : Color.white)
                 )
         }
-        .buttonStyle(.plain)
+        .buttonStyle(StridePressButtonStyle(scale: 0.965, pressedOpacity: 0.9, haptic: .medium))
         .disabled(items.isEmpty)
     }
 

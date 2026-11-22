@@ -188,7 +188,9 @@ struct RunCaptureView: View {
                     } label: {
                         Image(systemName: voiceEnabled ? "speaker.wave.2.fill" : "speaker.slash.fill")
                             .foregroundStyle(voiceEnabled ? Palette.green : Palette.textDim)
+                            .symbolEffect(.bounce, value: voiceEnabled)
                     }
+                    .sensoryFeedback(.selection, trigger: voiceEnabled)
                 }
             }
             .onAppear { tracker.requestPermission() }
@@ -218,6 +220,8 @@ struct RunCaptureView: View {
                 Circle()
                     .fill(tracker.running ? Palette.green : Palette.textFaint)
                     .frame(width: 6, height: 6)
+                    .scaleEffect(tracker.running ? 1.25 : 1.0)
+                    .animation(tracker.running ? .easeInOut(duration: 0.7).repeatForever(autoreverses: true) : .default, value: tracker.running)
                 Text(tracker.status)
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(Palette.text)
@@ -256,6 +260,7 @@ struct RunCaptureView: View {
                 .foregroundStyle(tint)
                 .minimumScaleFactor(0.6)
                 .lineLimit(1)
+                .numericRoll(value: value)
             Text(label)
                 .font(.system(size: 10))
                 .foregroundStyle(Palette.textFaint)
@@ -293,6 +298,7 @@ struct RunCaptureView: View {
                     HStack(spacing: 6) {
                         Image(systemName: tracker.running ? "pause.fill" : "play.fill")
                             .font(.system(size: 12, weight: .bold))
+                            .symbolEffect(.bounce, value: tracker.running)
                         Text(tracker.running ? "暂停" : "开始")
                             .font(.system(size: 15, weight: .bold))
                     }
@@ -301,7 +307,7 @@ struct RunCaptureView: View {
                     .padding(.vertical, 15)
                     .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(Color.white))
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(StridePressButtonStyle(scale: 0.96, pressedOpacity: 0.9, haptic: .medium))
 
                 Button {
                     tracker.loadDemo()
@@ -313,7 +319,7 @@ struct RunCaptureView: View {
                         .frame(width: 50, height: 50)
                         .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(Palette.cardHigh))
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.stridePress)
 
                 Button {
                     save()
@@ -324,10 +330,11 @@ struct RunCaptureView: View {
                         .frame(width: 50, height: 50)
                         .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(Palette.green))
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(StridePressButtonStyle(scale: 0.94, pressedOpacity: 0.9, haptic: .medium))
                 .disabled(tracker.points.isEmpty)
                 .opacity(tracker.points.isEmpty ? 0.4 : 1)
             }
+            .animation(.snappy(duration: 0.22), value: tracker.running)
         }
         .padding(.horizontal, Metrics.page)
         .padding(.top, 12)

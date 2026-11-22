@@ -57,6 +57,57 @@ extension ButtonStyle where Self == StridePressButtonStyle {
 
 extension ButtonStyle where Self == StrideCardButtonStyle {
     static var strideCard: StrideCardButtonStyle { StrideCardButtonStyle() }
+
+    static func strideCard(radius: CGFloat) -> StrideCardButtonStyle {
+        StrideCardButtonStyle(cornerRadius: radius)
+    }
+}
+
+/// 列表行按压弹性 + 轻底色高亮样式：适配列表行、设置项、日历格等中等密度容器。
+struct StrideRowButtonStyle: ButtonStyle {
+    var scale: CGFloat = 0.982
+    var cornerRadius: CGFloat = 14
+    var haptic: UIImpactFeedbackGenerator.FeedbackStyle? = .light
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .background(
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .fill(Color.white.opacity(configuration.isPressed ? 0.05 : 0.0))
+            )
+            .scaleEffect(configuration.isPressed ? scale : 1.0)
+            .animation(.spring(response: 0.26, dampingFraction: 0.76), value: configuration.isPressed)
+            .onChange(of: configuration.isPressed) { _, pressed in
+                if pressed, let haptic {
+                    UIImpactFeedbackGenerator(style: haptic).impactOccurred(intensity: 0.45)
+                }
+            }
+    }
+}
+
+extension ButtonStyle where Self == StrideRowButtonStyle {
+    static var strideRow: StrideRowButtonStyle { StrideRowButtonStyle() }
+
+    static func strideRow(radius: CGFloat) -> StrideRowButtonStyle {
+        StrideRowButtonStyle(cornerRadius: radius)
+    }
+}
+
+private struct StrideAppearModifier: ViewModifier {
+    var delay: Double
+    @State private var shown = false
+
+    func body(content: Content) -> some View {
+        content
+            .opacity(shown ? 1 : 0)
+            .offset(y: shown ? 0 : 8)
+            .onAppear {
+                guard !shown else { return }
+                withAnimation(.spring(response: 0.42, dampingFraction: 0.86).delay(delay)) {
+                    shown = true
+                }
+            }
+    }
 }
 
 // MARK: - 滚动景深、数字跳变、半屏抽屉、iOS 18 原生 Zoom 转场兼容封装
@@ -104,5 +155,10 @@ extension View {
         } else {
             self
         }
+    }
+
+    /// 轻量入场平滑上浮渐显动画。
+    func strideAppear(delay: Double = 0) -> some View {
+        modifier(StrideAppearModifier(delay: delay))
     }
 }

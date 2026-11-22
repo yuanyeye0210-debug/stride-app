@@ -484,10 +484,12 @@ struct ScientificCalculatorToolView: View {
             Text(value)
                 .font(.system(size: 26, weight: .black, design: .rounded))
                 .foregroundStyle(tint)
+                .numericRoll(value: value)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(16)
         .card(radius: 20, fill: Palette.card, stroke: tint.opacity(0.35))
+        .animation(.snappy(duration: 0.22), value: value)
     }
 
     private func kvRow(_ key: String, value: String) -> some View {
@@ -499,6 +501,7 @@ struct ScientificCalculatorToolView: View {
             Text(value)
                 .font(.system(size: 14, weight: .bold, design: .rounded))
                 .foregroundStyle(Palette.text)
+                .numericRoll(value: value)
         }
         .padding(13)
         .card(radius: 14, fill: Palette.card, stroke: Palette.stroke)

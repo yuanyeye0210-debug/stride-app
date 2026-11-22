@@ -98,6 +98,7 @@ struct MeView: View {
         }
         .sheet(isPresented: $showCoachSheet) {
             NavigationStack { CoachView() }
+                .strideSheetDetents([.large])
         }
         .sheet(isPresented: $showInjurySheet) {
             InjuryAvoidEditorSheet()
@@ -175,7 +176,7 @@ struct MeView: View {
                     .frame(width: 46, height: 38)
                     .liquidGlassCapsule(tint: Color.black.opacity(0.45))
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.stridePress)
 
             Spacer()
 
@@ -187,7 +188,7 @@ struct MeView: View {
                         .font(.system(size: 15, weight: .semibold))
                         .foregroundStyle(Palette.text)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.stridePress)
                 .accessibilityLabel("编辑资料")
 
                 Button {
@@ -197,7 +198,7 @@ struct MeView: View {
                         .font(.system(size: 15, weight: .semibold))
                         .foregroundStyle(Palette.text)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.stridePress)
                 .accessibilityLabel("设置")
             }
             .padding(.horizontal, 14)
@@ -225,7 +226,7 @@ struct MeView: View {
                     }
                     .shadow(color: .black.opacity(0.4), radius: 12, y: 4)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.stridePress)
 
             Text(profile.nickname)
                 .font(.system(size: 24, weight: .bold))
@@ -234,6 +235,7 @@ struct MeView: View {
             Text("\(profile.goal.rawValue) · 每周 \(profile.daysPerWeek) 练 · \(store.state.sessions.count) 次记录")
                 .font(.system(size: 12.5))
                 .foregroundStyle(Palette.textDim)
+                .numericRoll(value: store.state.sessions.count)
         }
         .padding(.top, 4)
     }
@@ -257,6 +259,7 @@ struct MeView: View {
                 Button("立即开始") {
                     showWidgetGuideSheet = true
                 }
+                .buttonStyle(.stridePress)
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(Palette.blue)
                 .padding(.top, 2)
@@ -271,7 +274,7 @@ struct MeView: View {
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(Palette.textFaint)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.stridePress)
         }
         .padding(16)
         .card(radius: 22, fill: Palette.card, stroke: Palette.stroke)
@@ -311,7 +314,7 @@ struct MeView: View {
                 .padding(.horizontal, 14)
                 .padding(.vertical, 15)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.strideRow(radius: 22))
         }
         .card(radius: 22, fill: Palette.card, stroke: Palette.stroke)
     }
@@ -331,7 +334,7 @@ struct MeView: View {
                     tint: Palette.green
                 )
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.strideRow(radius: 14))
 
             divider
 
@@ -340,7 +343,7 @@ struct MeView: View {
             } label: {
                 SettingRow(icon: "music.note.list", title: "歌单链接导入", value: "解析 BPM", tint: Palette.pink)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.strideRow(radius: 14))
 
             divider
 
@@ -349,7 +352,7 @@ struct MeView: View {
             } label: {
                 SettingRow(icon: "text.alignleft", title: "LRC 歌词同步", value: "不限次数", tint: Palette.blue)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.strideRow(radius: 14))
         }
         .card(radius: 22, fill: Palette.card, stroke: Palette.stroke)
     }
@@ -363,7 +366,7 @@ struct MeView: View {
             } label: {
                 SettingRow(icon: "chart.bar.xaxis", title: "趋势数据", value: "\(store.state.sessions.count) 练", tint: Palette.text)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.strideRow(radius: 14))
 
             divider
 
@@ -372,7 +375,7 @@ struct MeView: View {
             } label: {
                 SettingRow(icon: "figure.strengthtraining.functional", title: "视觉动作计数", value: "相机", tint: Palette.lime)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.strideRow(radius: 14))
 
             divider
 
@@ -381,7 +384,7 @@ struct MeView: View {
             } label: {
                 SettingRow(icon: "books.vertical", title: "动作库", value: "\(store.state.exercises.count) 个动作", tint: Palette.text)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.strideRow(radius: 14))
         }
         .card(radius: 22, fill: Palette.card, stroke: Palette.stroke)
     }
@@ -397,35 +400,35 @@ struct MeView: View {
             Button { showHeartRateSheet = true } label: {
                 SettingRow(icon: "heart.text.square", title: "心率区间", value: "\(profile.maxHeartRate) bpm", tint: Palette.coralHi)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.strideRow(radius: 14))
 
             divider
 
             NavigationLink { ProfileEditView() } label: {
                 SettingRow(icon: "chart.line.uptrend.xyaxis", title: "健身经验", value: profile.experience.rawValue, tint: Palette.text)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.strideRow(radius: 14))
 
             divider
 
             NavigationLink { ProfileEditView() } label: {
                 SettingRow(icon: "target", title: "健身目标", value: profile.goal.rawValue, tint: Palette.text)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.strideRow(radius: 14))
 
             divider
 
             Button { showInjurySheet = true } label: {
                 SettingRow(icon: "bandage", title: "受伤区域与避免区域", value: injuryText, tint: Palette.amber)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.strideRow(radius: 14))
 
             divider
 
             NavigationLink { TrainingAndRoutesDetailView() } label: {
                 SettingRow(icon: "dumbbell", title: "训练重量参考", value: weightText, tint: Palette.text)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.strideRow(radius: 14))
 
             divider
 
@@ -437,7 +440,7 @@ struct MeView: View {
                     tint: Palette.red
                 )
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.strideRow(radius: 14))
         }
         .card(radius: 22, fill: Palette.card, stroke: Palette.stroke)
     }
@@ -476,7 +479,7 @@ struct MeView: View {
                             .font(.system(size: 11, weight: .bold))
                             .foregroundStyle(Palette.textFaint)
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.stridePress)
                     .accessibilityLabel("知道了")
                 }
                 .padding(13)
@@ -494,14 +497,14 @@ struct MeView: View {
             } label: {
                 SettingRow(icon: "square.and.arrow.up", title: "导出备份", value: "JSON", tint: Palette.blue)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.strideRow(radius: 14))
 
             divider
 
             Button { showImporter = true } label: {
                 SettingRow(icon: "square.and.arrow.down", title: "导入备份", value: "JSON", tint: Palette.green)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.strideRow(radius: 14))
 
             if !autoBackups.isEmpty {
                 divider
@@ -511,7 +514,7 @@ struct MeView: View {
                 } label: {
                     SettingRow(icon: "arrow.counterclockwise", title: "恢复自动备份", value: "\(autoBackups.count) 个", tint: Palette.amber)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.strideRow(radius: 14))
             }
         }
         .card(radius: 22, fill: Palette.card, stroke: Palette.stroke)
@@ -529,7 +532,7 @@ struct MeView: View {
             } label: {
                 SettingRow(icon: "arrow.counterclockwise", title: "重置今日额度", value: "", tint: Palette.textDim)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.strideRow(radius: 14))
         }
         .card(radius: 22, fill: Palette.card, stroke: Palette.stroke)
     }
@@ -629,13 +632,15 @@ private struct InjuryAvoidEditorSheet: View {
                                     Spacer()
                                     Image(systemName: on ? "checkmark.circle.fill" : "circle")
                                         .foregroundStyle(on ? Palette.amber : Palette.textFaint)
+                                        .symbolEffect(.bounce, value: on)
                                 }
                                 .padding(14)
                                 .card(radius: 16, fill: Palette.card, stroke: on ? Palette.amber.opacity(0.45) : Palette.stroke)
                             }
-                            .buttonStyle(.plain)
+                            .buttonStyle(.strideCard(radius: 16))
                         }
                     }
+                    .sensoryFeedback(.selection, trigger: store.state.profile.injuryAvoidAreas.count)
                     .padding(Metrics.page)
                 }
             }

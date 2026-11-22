@@ -35,8 +35,10 @@ struct RunCenterView: View {
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .animation(.snappy(duration: 0.24), value: subTab)
             }
         }
+        .sensoryFeedback(.selection, trigger: subTab)
         .sheet(isPresented: $showGPSRun) {
             RunCaptureView()
         }
@@ -44,6 +46,7 @@ struct RunCenterView: View {
             IndoorSportTimerSheet(sport: sport) { msg in
                 toast = msg
             }
+            .strideSheetDetents([.medium, .large])
         }
         .toast($toast)
     }
@@ -66,10 +69,11 @@ struct RunCenterView: View {
                         Capsule()
                             .fill(active ? Palette.lime : Color.clear)
                             .frame(width: 28, height: 3)
+                            .animation(.snappy(duration: 0.22), value: active)
                     }
                     .padding(.top, 8)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.stridePress)
             }
         }
         .frame(maxWidth: .infinity)
@@ -151,7 +155,8 @@ struct RunCenterView: View {
             .padding(.vertical, 15)
             .card(radius: 20, fill: Color(hex: 0x131315), stroke: Palette.stroke)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.strideCard(radius: 20))
+        .strideScrollDepth(minScale: 0.96, minOpacity: 0.85)
     }
 
     // MARK: - 「我的」子视图（领地、图层、12 周报告、隐私区，图 19）
@@ -189,7 +194,7 @@ struct RunCenterView: View {
                     .padding(16)
                     .card(radius: 22, fill: Palette.card, stroke: Palette.stroke)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.strideCard(radius: 22))
 
                 // 分组 1：领地与报告
                 VStack(spacing: 0) {
@@ -198,7 +203,7 @@ struct RunCenterView: View {
                     } label: {
                         SettingRow(icon: "map", title: "领地地图", value: "\(territory.cellCount) 格", tint: Palette.lime)
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.strideRow(radius: 14))
                     runDivider
 
                     Menu {
@@ -215,7 +220,7 @@ struct RunCenterView: View {
                     } label: {
                         SettingRow(icon: "flag.fill", title: "我的领地", value: String(format: "%.2f km²", territory.areaKm2), tint: Palette.text)
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.strideRow(radius: 14))
                     runDivider
 
                     NavigationLink {
@@ -223,7 +228,7 @@ struct RunCenterView: View {
                     } label: {
                         SettingRow(icon: "chart.xyaxis.line", title: "跑步报告", value: "最近 12 周", tint: Palette.text)
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.strideRow(radius: 14))
                 }
                 .card(radius: 22, fill: Palette.card, stroke: Palette.stroke)
 
@@ -234,7 +239,7 @@ struct RunCenterView: View {
                     } label: {
                         SettingRow(icon: "eye.slash", title: "隐私区", value: "\(store.state.privacyZones.count) 个", tint: Palette.text)
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.strideRow(radius: 14))
                     runDivider
 
                     NavigationLink {
@@ -242,7 +247,7 @@ struct RunCenterView: View {
                     } label: {
                         SettingRow(icon: "location", title: "位置与隐私", value: "仅本机", tint: Palette.text)
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.strideRow(radius: 14))
                 }
                 .card(radius: 22, fill: Palette.card, stroke: Palette.stroke)
             }
@@ -339,29 +344,37 @@ private struct IndoorSportTimerSheet: View {
                             .font(.system(size: 46, weight: .heavy, design: .rounded))
                             .foregroundStyle(Palette.text)
                             .monospacedDigit()
+                            .numericRoll(value: elapsedSec)
 
                         HStack(spacing: 12) {
                             Button {
                                 running.toggle()
                             } label: {
-                                Label(running ? "暂停" : (elapsedSec > 0 ? "继续" : "开始计时"), systemImage: running ? "pause.fill" : "play.fill")
-                                    .font(.system(size: 14, weight: .bold))
-                                    .foregroundStyle(Color.black)
-                                    .padding(.horizontal, 22)
-                                    .padding(.vertical, 11)
-                                    .background(Capsule().fill(Palette.lime))
+                                Label {
+                                    Text(running ? "暂停" : (elapsedSec > 0 ? "继续" : "开始计时"))
+                                } icon: {
+                                    Image(systemName: running ? "pause.fill" : "play.fill")
+                                        .symbolEffect(.bounce, value: running)
+                                }
+                                .font(.system(size: 14, weight: .bold))
+                                .foregroundStyle(Color.black)
+                                .padding(.horizontal, 22)
+                                .padding(.vertical, 11)
+                                .background(Capsule().fill(Palette.lime))
                             }
-                            .buttonStyle(.plain)
+                            .buttonStyle(StridePressButtonStyle(scale: 0.95, pressedOpacity: 0.9, haptic: .medium))
 
                             if elapsedSec > 0 {
                                 Button("清零") {
                                     running = false
                                     elapsedSec = 0
                                 }
+                                .buttonStyle(.stridePress)
                                 .font(.system(size: 14, weight: .semibold))
                                 .foregroundStyle(Palette.textDim)
                             }
                         }
+                        .animation(.snappy(duration: 0.2), value: running)
                     }
                     .padding(22)
                     .frame(maxWidth: .infinity)
@@ -589,7 +602,7 @@ private struct PrivacyZonesEditorView: View {
                             } label: {
                                 Image(systemName: "trash").foregroundStyle(Palette.red)
                             }
-                            .buttonStyle(.plain)
+                            .buttonStyle(.stridePress)
                         }
                         .padding(14)
                         .card(radius: 16, fill: Palette.card, stroke: Palette.stroke)

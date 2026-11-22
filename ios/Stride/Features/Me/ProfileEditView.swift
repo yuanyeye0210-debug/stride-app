@@ -36,7 +36,7 @@ struct ProfileEditView: View {
                         .padding(.vertical, 16)
                         .background(RoundedRectangle(cornerRadius: 20, style: .continuous).fill(Color.white))
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(StridePressButtonStyle(scale: 0.97, pressedOpacity: 0.9, haptic: .medium))
                 .padding(.horizontal, Metrics.page)
                 .padding(.bottom, 14)
             }
@@ -82,9 +82,11 @@ struct ProfileEditView: View {
                             .padding(.vertical, 10)
                             .background(Capsule().fill(draft.goal == goal ? Color.white : Palette.cardSoft))
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.stridePress)
                 }
             }
+            .animation(.snappy(duration: 0.2), value: draft.goal)
+            .sensoryFeedback(.selection, trigger: draft.goal)
 
             Divider().overlay(Palette.stroke)
 
@@ -104,9 +106,11 @@ struct ProfileEditView: View {
                             .padding(.vertical, 10)
                             .background(Capsule().fill(draft.experience == level ? Color.white : Palette.cardSoft))
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.stridePress)
                 }
             }
+            .animation(.snappy(duration: 0.2), value: draft.experience)
+            .sensoryFeedback(.selection, trigger: draft.experience)
 
             HStack {
                 Text("每周训练")
@@ -222,7 +226,7 @@ struct PlanEditorView: View {
                         .padding(.vertical, 15)
                         .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(Color.white))
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(StridePressButtonStyle(scale: 0.97, pressedOpacity: 0.9, haptic: .medium))
                     .padding(.top, 4)
                 }
                 .padding(.horizontal, Metrics.page)

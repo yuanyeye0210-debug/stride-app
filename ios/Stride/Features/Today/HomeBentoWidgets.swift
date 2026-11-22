@@ -104,12 +104,13 @@ struct WaterBentoCard: View {
                         Text("\(stepMl) 毫升")
                             .font(.system(size: 11.5, weight: .semibold, design: .rounded))
                             .foregroundStyle(Palette.text)
+                            .numericRoll(value: stepMl)
                             .padding(.horizontal, 10)
                             .frame(height: 30)
                             .background(Capsule().fill(Color.white.opacity(0.15)))
                             .overlay(Capsule().strokeBorder(Color.white.opacity(0.20), lineWidth: 0.7))
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.stridePress)
 
                     Button {
                         onAdjust(stepMl)
@@ -120,7 +121,7 @@ struct WaterBentoCard: View {
                             .frame(width: 30, height: 30)
                             .background(Circle().fill(Palette.blue))
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.stridePress)
                 }
                 .padding(.bottom, 2)
             }
@@ -128,6 +129,8 @@ struct WaterBentoCard: View {
         .padding(16)
         .frame(height: 178)
         .card(radius: Metrics.radius, fill: Palette.card, stroke: Palette.stroke)
+        .sensoryFeedback(.selection, trigger: stepMl)
+        .sensoryFeedback(.impact(weight: .light), trigger: ml)
     }
 }
 
@@ -209,6 +212,8 @@ struct CoachNoteBentoCard: View {
                         .foregroundStyle(Color(hex: 0x222018))
                         .lineSpacing(3)
                         .fixedSize(horizontal: false, vertical: true)
+                        .contentTransition(.opacity)
+                        .id(quoteIndex)
                         .onTapGesture(perform: onOpenCoach)
 
                     Spacer(minLength: 0)
@@ -234,7 +239,7 @@ struct CoachNoteBentoCard: View {
                             .padding(.vertical, 3)
                             .padding(.horizontal, 4)
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(.stridePress)
                     }
                 }
                 .padding(.top, 20)
@@ -263,6 +268,7 @@ struct CoachNoteBentoCard: View {
         }
         .frame(height: 178)
         .clipShape(RoundedRectangle(cornerRadius: Metrics.radius, style: .continuous))
+        .sensoryFeedback(.selection, trigger: quoteIndex)
     }
 }
 
@@ -287,6 +293,7 @@ struct SupplementBentoCard: View {
         .card(radius: Metrics.radius, fill: Palette.card, stroke: Palette.stroke)
         .contentShape(Rectangle())
         .onTapGesture(perform: onManage)
+        .sensoryFeedback(.success, trigger: takenIDs)
     }
 
     private var emptyState: some View {
@@ -317,7 +324,7 @@ struct SupplementBentoCard: View {
                         .padding(.vertical, 6)
                         .background(Capsule().fill(Palette.purple.opacity(0.88)))
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.stridePress)
             }
         }
     }
@@ -333,6 +340,7 @@ struct SupplementBentoCard: View {
                 Text("\(doneCount)/\(items.count)")
                     .font(.system(size: 12, weight: .bold, design: .rounded))
                     .foregroundStyle(doneCount == items.count ? Palette.green : Palette.purple)
+                    .numericRoll(value: doneCount)
             }
 
             ForEach(items.prefix(3)) { item in
@@ -344,6 +352,7 @@ struct SupplementBentoCard: View {
                         Image(systemName: taken ? "checkmark.circle.fill" : "circle")
                             .font(.system(size: 14, weight: .semibold))
                             .foregroundStyle(taken ? Palette.green : Palette.purple)
+                            .symbolEffect(.bounce, value: taken)
                         Text(item.name)
                             .font(.system(size: 12.5, weight: .medium))
                             .foregroundStyle(taken ? Palette.textDim : Palette.text)
@@ -356,7 +365,7 @@ struct SupplementBentoCard: View {
                     }
                     .padding(.vertical, 3)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.strideRow(radius: 10))
             }
 
             if items.count > 3 {
@@ -424,6 +433,7 @@ struct StreakCalendarBentoCard: View {
                         .foregroundStyle(Palette.coral)
                         .lineLimit(1)
                         .minimumScaleFactor(0.6)
+                        .numericRoll(value: streak)
 
                     Text("天")
                         .font(.system(size: 12.5, weight: .semibold))
@@ -459,7 +469,7 @@ struct StreakCalendarBentoCard: View {
             .frame(height: 178)
             .clipShape(RoundedRectangle(cornerRadius: Metrics.radius, style: .continuous))
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.strideCard)
     }
 }
 
@@ -484,6 +494,7 @@ struct CalorieBalanceBentoCard: View {
                 .foregroundStyle(isOver ? Palette.coral : Color(hex: 0x0E0E10))
                 .minimumScaleFactor(0.6)
                 .lineLimit(1)
+                .numericRoll(value: remaining)
 
             Text("千卡 · 目标 \(WaterLog.grouped(goal))")
                 .font(.system(size: 11.5, weight: .medium))
@@ -501,7 +512,7 @@ struct CalorieBalanceBentoCard: View {
                         .frame(height: 36)
                         .background(Capsule().fill(Color(hex: 0x0F0F12)))
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.stridePress)
                 .accessibilityLabel("拍照记餐")
 
                 Button(action: onManual) {
@@ -512,7 +523,7 @@ struct CalorieBalanceBentoCard: View {
                         .frame(height: 36)
                         .background(Capsule().fill(Color(hex: 0xEBEBED)))
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.stridePress)
             }
         }
         .padding(16)

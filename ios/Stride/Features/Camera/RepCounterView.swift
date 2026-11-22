@@ -196,7 +196,7 @@ struct RepCounterView: View {
                     Text("\(counter.reps)")
                         .font(.system(size: 96, weight: .heavy, design: .rounded))
                         .foregroundStyle(.white)
-                        .contentTransition(.numericText())
+                        .numericRoll(value: counter.reps)
                     Text("次")
                         .font(.system(size: 14, weight: .semibold))
                         .foregroundStyle(.white.opacity(0.7))
@@ -218,6 +218,7 @@ struct RepCounterView: View {
         .navigationTitle("视觉计数")
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(.hidden, for: .navigationBar)
+        .sensoryFeedback(.impact(weight: .medium), trigger: counter.reps)
         .onDisappear { counter.stop() }
     }
 
@@ -226,6 +227,7 @@ struct RepCounterView: View {
             Image(systemName: "viewfinder")
                 .font(.system(size: 12, weight: .bold))
                 .foregroundStyle(Palette.green)
+                .symbolEffect(.pulse, isActive: counter.running)
             Text(counter.status)
                 .font(.system(size: 12, weight: .medium))
                 .foregroundStyle(.white.opacity(0.9))
@@ -242,6 +244,7 @@ struct RepCounterView: View {
             Text(value)
                 .font(.system(size: 15, weight: .bold, design: .rounded))
                 .foregroundStyle(.white)
+                .numericRoll(value: value)
             Text(title)
                 .font(.system(size: 10))
                 .foregroundStyle(.white.opacity(0.6))
@@ -267,7 +270,7 @@ struct RepCounterView: View {
                 .padding(.vertical, 15)
                 .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(.white))
             }
-            .buttonStyle(.plain)
+            .buttonStyle(StridePressButtonStyle(scale: 0.95, pressedOpacity: 0.9, haptic: .medium))
 
             Button {
                 counter.reset()
@@ -278,7 +281,7 @@ struct RepCounterView: View {
                     .frame(width: 50, height: 50)
                     .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(.white.opacity(0.16)))
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.stridePress)
         }
         .padding(.horizontal, Metrics.page)
         .padding(.top, 12)

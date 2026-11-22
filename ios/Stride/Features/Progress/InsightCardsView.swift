@@ -126,10 +126,12 @@ private struct StandHoursBarView: View {
                         .frame(height: 18)
                 }
             }
+            .animation(.spring(response: 0.4, dampingFraction: 0.82), value: activeHours)
             HStack {
                 Text("\(activeHours) / \(goalHours) 小时")
                     .font(.system(size: 11, weight: .semibold, design: .rounded))
                     .foregroundStyle(Palette.textDim)
+                    .numericRoll(value: activeHours)
                 Spacer()
                 Text("1 格 = 1 小时")
                     .font(.system(size: 11))
@@ -181,6 +183,7 @@ private struct WeekSevenBarsView: View {
                 }
             }
             .frame(height: 76)
+            .animation(.spring(response: 0.45, dampingFraction: 0.82), value: values)
         }
     }
 

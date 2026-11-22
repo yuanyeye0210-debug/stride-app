@@ -73,12 +73,15 @@ struct SettingsView: View {
             }
             .sheet(isPresented: $showStorageSheet) {
                 StorageDataSheet()
+                    .strideSheetDetents([.medium, .large])
             }
             .sheet(isPresented: $showScienceSheet) {
                 ScienceReferencesSheet()
+                    .strideSheetDetents([.medium, .large])
             }
             .sheet(isPresented: $showPrivacySheet) {
                 PrivacyControlSheet()
+                    .strideSheetDetents([.medium, .large])
             }
             .toast($toast)
         }
@@ -102,6 +105,7 @@ struct SettingsView: View {
                         .foregroundStyle(
                             LinearGradient(colors: [Color(hex: 0xFF5A87), Color(hex: 0xFF2D55)], startPoint: .top, endPoint: .bottom)
                         )
+                        .symbolEffect(.bounce, value: health.authorized)
                 }
                 .padding(.top, 10)
 
@@ -127,7 +131,7 @@ struct SettingsView: View {
             .padding(18)
             .background(RoundedRectangle(cornerRadius: 24, style: .continuous).fill(Color.white))
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.strideCard(radius: 24))
     }
 
     // MARK: - 外设与视觉识别
@@ -145,7 +149,7 @@ struct SettingsView: View {
                     tint: Palette.green
                 )
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.strideRow(radius: 14))
 
             rowDivider
 
@@ -154,7 +158,7 @@ struct SettingsView: View {
             } label: {
                 SettingRow(icon: "figure.strengthtraining.functional", title: "视觉动作计数", value: "相机识别", tint: Palette.lime)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.strideRow(radius: 14))
         }
         .card(radius: 22, fill: Palette.card, stroke: Palette.stroke)
     }
@@ -229,7 +233,7 @@ struct SettingsView: View {
             } label: {
                 SettingRow(icon: "figure.run", title: "训练设置", value: "周计划", tint: Palette.text)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.strideRow(radius: 14))
 
             rowDivider
 
@@ -243,7 +247,7 @@ struct SettingsView: View {
             } label: {
                 SettingRow(icon: "square.and.arrow.up", title: "导出训练数据", value: "JSON", tint: Palette.blue)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.strideRow(radius: 14))
 
             rowDivider
 
@@ -252,7 +256,7 @@ struct SettingsView: View {
             } label: {
                 SettingRow(icon: "icloud.fill", title: "iCloud 同步", value: "仅本机", tint: Palette.blue)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.strideRow(radius: 14))
 
             rowDivider
 
@@ -261,7 +265,7 @@ struct SettingsView: View {
             } label: {
                 SettingRow(icon: "externaldrive", title: "存储空间和数据", value: storageSummary, tint: Palette.text)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.strideRow(radius: 14))
         }
         .card(radius: 22, fill: Palette.card, stroke: Palette.stroke)
     }
@@ -275,7 +279,7 @@ struct SettingsView: View {
             } label: {
                 SettingRow(icon: "lock.shield", title: "隐私控制", value: "本机优先", tint: Palette.text)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.strideRow(radius: 14))
 
             rowDivider
 
@@ -284,7 +288,7 @@ struct SettingsView: View {
             } label: {
                 SettingRow(icon: "function", title: "营养、健康与医学计算依据", value: "查看公式", tint: Palette.green)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.strideRow(radius: 14))
         }
         .card(radius: 22, fill: Palette.card, stroke: Palette.stroke)
     }
@@ -361,13 +365,16 @@ private struct StorageDataSheet: View {
                         Text(clearedMsg)
                             .font(.system(size: 13, weight: .semibold))
                             .foregroundStyle(Palette.green)
+                            .transition(.opacity.combined(with: .move(edge: .top)))
                     }
 
                     Spacer()
 
                     Button {
                         let freed = store.clearPhotoCache()
-                        clearedMsg = "已清理照片缓存（释放 \(formatBytes(freed))），训练与饮食文字记录不受影响。"
+                        withAnimation(.snappy(duration: 0.22)) {
+                            clearedMsg = "已清理照片缓存（释放 \(formatBytes(freed))），训练与饮食文字记录不受影响。"
+                        }
                     } label: {
                         Text("清理图片库缓存照片")
                             .font(.system(size: 15, weight: .bold))
@@ -376,8 +383,9 @@ private struct StorageDataSheet: View {
                             .padding(.vertical, 15)
                             .card(radius: 18, fill: Palette.card, stroke: Palette.red.opacity(0.35))
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(StridePressButtonStyle(scale: 0.97, pressedOpacity: 0.9, haptic: .heavy))
                 }
+                .animation(.snappy(duration: 0.22), value: clearedMsg)
                 .padding(Metrics.page)
             }
             .navigationTitle("存储空间和数据")

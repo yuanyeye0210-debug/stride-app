@@ -381,7 +381,7 @@ struct SessionView: View {
             .padding(.vertical, 15)
             .card(radius: 20, fill: Palette.cardSoft, stroke: Palette.stroke)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.stridePress)
     }
 
     // MARK: - 休息条
@@ -418,7 +418,7 @@ struct SessionView: View {
                         .padding(.vertical, 8)
                         .background(Capsule().fill(Color.white))
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.stridePress)
             }
             .padding(14)
             .background(

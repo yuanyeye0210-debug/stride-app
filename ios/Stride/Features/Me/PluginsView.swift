@@ -185,14 +185,17 @@ private struct RestTimerTool: View {
                                 .padding(.vertical, 9)
                                 .background(Capsule().fill(total == sec ? Color.white : Palette.cardSoft))
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(.stridePress)
                     }
                 }
+                .animation(.snappy(duration: 0.2), value: total)
+                .sensoryFeedback(.selection, trigger: total)
 
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
                     Text(String(format: "%d:%02d", left / 60, left % 60))
                         .font(.system(size: 36, weight: .bold, design: .rounded))
                         .foregroundStyle(left == 0 ? Palette.textFaint : Palette.text)
+                        .numericRoll(value: left, countsDown: true)
                     Spacer()
                     Button {
                         if left == 0 { left = total }
@@ -205,7 +208,7 @@ private struct RestTimerTool: View {
                             .padding(.vertical, 9)
                             .background(Capsule().fill(Color.white))
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(StridePressButtonStyle(scale: 0.94, pressedOpacity: 0.9, haptic: .medium))
                 }
             }
         }

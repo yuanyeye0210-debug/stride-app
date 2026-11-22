@@ -79,6 +79,7 @@ struct DietDashboardView: View {
 
                     // 碳循环卡片
                     carbCycleCard
+                        .strideScrollDepth(minScale: 0.96, minOpacity: 0.85)
 
                     Text("记录左滑或长按可删除 · 可在右上齿轮调整每日目标")
                         .font(.system(size: 11))
@@ -106,7 +107,7 @@ struct DietDashboardView: View {
                 .background(Capsule().fill(Palette.blue))
                 .shadow(color: Palette.blue.opacity(0.4), radius: 14, y: 6)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(StridePressButtonStyle(scale: 0.95, pressedOpacity: 0.9, haptic: .medium))
             .padding(.bottom, 18)
         }
         .navigationTitle(cal.isDateInToday(selectedDate) ? "饮食记录" : dateString(selectedDate))
@@ -123,6 +124,7 @@ struct DietDashboardView: View {
                             .frame(width: 32, height: 32)
                             .background(Circle().fill(Palette.coralHi))
                     }
+                    .buttonStyle(.stridePress)
 
                     Button {
                         showGoalsSheet = true
@@ -133,6 +135,7 @@ struct DietDashboardView: View {
                             .frame(width: 32, height: 32)
                             .background(Circle().fill(Color.white.opacity(0.14)))
                     }
+                    .buttonStyle(.stridePress)
                 }
             }
         }
@@ -217,7 +220,7 @@ struct DietDashboardView: View {
                             .frame(width: 28, height: 28)
                             .background(Circle().fill(Color.white.opacity(0.15)))
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.stridePress)
 
                     Button {
                         waterStepMl = waterStepMl == 500 ? 200 : (waterStepMl == 200 ? 350 : 500)
@@ -225,11 +228,12 @@ struct DietDashboardView: View {
                         Text("\(waterStepMl) 毫升")
                             .font(.system(size: 11, weight: .semibold, design: .rounded))
                             .foregroundStyle(Palette.text)
+                            .numericRoll(value: waterStepMl)
                             .padding(.horizontal, 9)
                             .frame(height: 28)
                             .background(Capsule().fill(Color.white.opacity(0.16)))
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.stridePress)
 
                     Button { store.addWater(delta: waterStepMl, now: selectedDate) } label: {
                         Image(systemName: "plus")
@@ -238,7 +242,7 @@ struct DietDashboardView: View {
                             .frame(width: 28, height: 28)
                             .background(Circle().fill(Palette.blue))
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.stridePress)
                 }
                 .padding(.bottom, 6)
             }
@@ -246,6 +250,8 @@ struct DietDashboardView: View {
         .padding(14)
         .frame(height: 178)
         .card(radius: 22, fill: Palette.card, stroke: Palette.stroke)
+        .sensoryFeedback(.selection, trigger: waterStepMl)
+        .sensoryFeedback(.impact(weight: .light), trigger: waterMl)
     }
 
     // MARK: - 2. 饮食热量缺口与宏量卡
@@ -269,7 +275,7 @@ struct DietDashboardView: View {
                         .frame(width: 26, height: 26)
                         .background(Circle().fill(Color.white.opacity(0.12)))
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.stridePress)
             }
 
             HStack(alignment: .firstTextBaseline, spacing: 3) {
@@ -332,12 +338,13 @@ struct DietDashboardView: View {
                         .frame(width: 26, height: 26)
                         .background(Circle().fill(Color.white.opacity(0.12)))
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.stridePress)
             }
 
             Text("\(doneCount) 种")
                 .font(.system(size: 22, weight: .bold, design: .rounded))
                 .foregroundStyle(Palette.text)
+                .numericRoll(value: doneCount)
 
             Spacer(minLength: 0)
 
@@ -381,7 +388,7 @@ struct DietDashboardView: View {
                         .frame(width: 26, height: 26)
                         .background(Circle().fill(Color.white.opacity(0.12)))
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.stridePress)
             }
             Text("\(cur) / \(proteinTarget) g")
                 .font(.system(size: 19, weight: .bold, design: .rounded))
@@ -430,7 +437,7 @@ struct DietDashboardView: View {
                         .frame(width: 26, height: 26)
                         .background(Circle().fill(Color.white.opacity(0.12)))
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.stridePress)
             }
             Text("\(cur) / \(carbTarget) g")
                 .font(.system(size: 19, weight: .bold, design: .rounded))
@@ -473,7 +480,7 @@ struct DietDashboardView: View {
                         .frame(width: 26, height: 26)
                         .background(Circle().fill(Color.white.opacity(0.12)))
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.stridePress)
             }
             Text("\(cur) / \(fatTarget) g")
                 .font(.system(size: 19, weight: .bold, design: .rounded))
@@ -522,7 +529,7 @@ struct DietDashboardView: View {
                         .frame(width: 26, height: 26)
                         .background(Circle().fill(Color.white.opacity(0.12)))
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.stridePress)
             }
             Text("\(cur) / \(target) g")
                 .font(.system(size: 19, weight: .bold, design: .rounded))
@@ -577,7 +584,7 @@ struct DietDashboardView: View {
                         .font(.system(size: 13))
                         .foregroundStyle(Palette.textDim)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.stridePress)
             }
 
             HStack(spacing: 10) {
@@ -586,6 +593,7 @@ struct DietDashboardView: View {
                     Text("\(Int(nutrition.kcal.rounded())) 千卡")
                         .font(.system(size: 14, weight: .bold, design: .rounded))
                         .foregroundStyle(Palette.text)
+                        .numericRoll(value: Int(nutrition.kcal.rounded()))
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
 
@@ -594,6 +602,7 @@ struct DietDashboardView: View {
                     Text("\(WaterLog.grouped(waterMl)) 毫升")
                         .font(.system(size: 14, weight: .bold, design: .rounded))
                         .foregroundStyle(Palette.text)
+                        .numericRoll(value: waterMl)
                     BarProgress(progress: Double(waterMl) / Double(waterGoal), color: Palette.blue, height: 3)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -669,7 +678,7 @@ struct DietDashboardView: View {
                 .padding(.vertical, 8)
                 .background(Capsule().fill(Color.white.opacity(0.08)))
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.stridePress)
         }
         .padding(16)
         .card(radius: 24, fill: Palette.card, stroke: Palette.stroke)
@@ -749,7 +758,7 @@ struct DietDashboardView: View {
             .padding(16)
             .card(radius: 22, fill: Palette.card, stroke: Palette.stroke)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.strideCard(radius: 22))
     }
 
     private func dateString(_ d: Date) -> String {
@@ -808,9 +817,10 @@ private struct CarbCycleEditorSheet: View {
                                         .padding(.vertical, 10)
                                         .background(Capsule().fill(on ? Palette.blue : Palette.cardSoft))
                                 }
-                                .buttonStyle(.plain)
+                                .buttonStyle(.stridePress)
                             }
                         }
+                        .sensoryFeedback(.selection, trigger: store.state.carbCycle.highDays)
 
                         Stepper("高碳日：\(store.state.carbCycle.highCarbG) g", value: $store.state.carbCycle.highCarbG, in: 120...500, step: 10)
                             .foregroundStyle(Palette.text)

@@ -18,6 +18,7 @@ struct SectionHeader: View {
                     Button(trailing, action: action)
                         .font(.system(size: 14, weight: .medium))
                         .foregroundStyle(Palette.textDim)
+                        .buttonStyle(.stridePress)
                 } else {
                     Text(trailing)
                         .font(.system(size: 14, weight: .medium))
@@ -56,7 +57,7 @@ struct PrimaryButton: View {
                     .fill(enabled ? tint : Palette.cardHigh)
             )
         }
-        .buttonStyle(.plain)
+        .buttonStyle(StridePressButtonStyle(scale: 0.965, pressedOpacity: 0.9, haptic: .medium))
         .disabled(!enabled)
     }
 }
@@ -78,7 +79,7 @@ struct SecondaryButton: View {
             .background(Capsule().fill(Palette.cardHigh))
             .overlay(Capsule().strokeBorder(Palette.stroke, lineWidth: 1))
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.stridePress)
     }
 }
 
@@ -162,6 +163,7 @@ struct StatTile: View {
                 .foregroundStyle(tint)
                 .minimumScaleFactor(0.6)
                 .lineLimit(1)
+                .numericRoll(value: value)
             Text(label)
                 .font(.system(size: 12, weight: .medium))
                 .foregroundStyle(Palette.textDim)
@@ -184,11 +186,14 @@ struct RadioDot: View {
                 Image(systemName: "checkmark")
                     .font(.system(size: 14, weight: .heavy))
                     .foregroundStyle(Color.black)
+                    .symbolEffect(.bounce, value: on)
             } else {
                 Circle().strokeBorder(Palette.strokeHi, lineWidth: 2)
             }
         }
         .frame(width: 30, height: 30)
+        .scaleEffect(on ? 1.0 : 0.96)
+        .animation(.spring(response: 0.28, dampingFraction: 0.72), value: on)
     }
 }
 
@@ -224,14 +229,20 @@ struct ToastView: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            Image(systemName: icon).foregroundStyle(Palette.green)
+            Image(systemName: icon)
+                .foregroundStyle(Palette.green)
+                .symbolEffect(.bounce, value: text)
             Text(text).font(.system(size: 14, weight: .medium)).foregroundStyle(Palette.text)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 11)
-        .background(Capsule().fill(Palette.cardHigh))
-        .overlay(Capsule().strokeBorder(Palette.stroke, lineWidth: 1))
-        .shadow(color: .black.opacity(0.4), radius: 14, y: 6)
+        .background {
+            Capsule()
+                .fill(.ultraThinMaterial)
+                .overlay(Capsule().fill(Palette.cardHigh.opacity(0.65)))
+        }
+        .overlay(Capsule().strokeBorder(Palette.strokeHi, lineWidth: 1))
+        .shadow(color: .black.opacity(0.45), radius: 16, y: 8)
     }
 }
 
@@ -249,5 +260,8 @@ extension View {
             }
         }
         .animation(.spring(response: 0.35, dampingFraction: 0.85), value: text.wrappedValue)
+        .sensoryFeedback(trigger: text.wrappedValue) { _, newValue in
+            newValue != nil ? .success : nil
+        }
     }
 }

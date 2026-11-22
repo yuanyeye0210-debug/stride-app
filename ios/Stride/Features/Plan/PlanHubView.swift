@@ -40,6 +40,7 @@ struct PlanHubView: View {
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .animation(.snappy(duration: 0.24), value: subTab)
 
             topBar
         }
@@ -57,9 +58,11 @@ struct PlanHubView: View {
                     showCreateTemplate = true
                 }
             })
+            .strideSheetDetents([.medium, .large])
         }
         .sheet(isPresented: $showCreateTemplate) {
             CreateTemplateSheet()
+                .strideSheetDetents([.medium, .large])
         }
     }
 
@@ -151,12 +154,13 @@ struct PlanHubView: View {
                         .frame(width: 34, height: 34)
                         .liquidGlassCapsule(tint: Color.black.opacity(0.45))
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.stridePress)
 
                 Text(monthTitle(calendarMonth))
                     .font(.system(size: 14, weight: .bold))
                     .foregroundStyle(Palette.text)
                     .minimumScaleFactor(0.8)
+                    .contentTransition(.numericText())
 
                 Button {
                     if !isCurrentOrFutureMonth(calendarMonth),
@@ -170,9 +174,10 @@ struct PlanHubView: View {
                         .frame(width: 34, height: 34)
                         .liquidGlassCapsule(tint: Color.black.opacity(0.45))
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.stridePress)
                 .disabled(isCurrentOrFutureMonth(calendarMonth))
             }
+            .sensoryFeedback(.selection, trigger: calendarMonth)
 
         case .templates:
             Button {

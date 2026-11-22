@@ -201,7 +201,7 @@ struct MuscleBodyHeatmapCard: View {
                 )
                 .scaleEffect(isSelected ? 1.06 : 1.0)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.stridePress)
     }
 }
 
@@ -341,7 +341,7 @@ struct ExerciseOneRMTrendCard: View {
                             .frame(width: active ? 11 : 8, height: active ? 11 : 8)
                             .overlay(Circle().strokeBorder(Color.black, lineWidth: 1.5))
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.stridePress)
                     .position(x: x, y: y)
 
                     if active || idx == points.count - 1 && tappedIndex == nil {

@@ -99,6 +99,7 @@ struct LyricsView: View {
                 HStack(spacing: 4) {
                     Image(systemName: showEditor ? "text.alignleft" : "square.and.pencil")
                         .font(.system(size: 11, weight: .bold))
+                        .symbolEffect(.bounce, value: showEditor)
                     Text(showEditor ? "看同步" : "粘歌词")
                         .font(.system(size: 13, weight: .semibold))
                 }
@@ -107,13 +108,14 @@ struct LyricsView: View {
                 .padding(.vertical, 8)
                 .background(Capsule().fill(Palette.cardHigh))
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.stridePress)
 
             Spacer()
 
             Text("\(lines.count) 行 · 不限次数")
                 .font(.system(size: 11))
                 .foregroundStyle(Palette.textFaint)
+                .numericRoll(value: lines.count)
         }
     }
 
@@ -144,7 +146,7 @@ struct LyricsView: View {
                     .padding(.vertical, 12)
                     .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Color.white))
             }
-            .buttonStyle(.plain)
+            .buttonStyle(StridePressButtonStyle(scale: 0.97, pressedOpacity: 0.9, haptic: .medium))
         }
         .padding(14)
         .card(radius: 20, fill: Palette.card, stroke: Palette.stroke)
@@ -201,6 +203,7 @@ struct LyricsView: View {
                     HStack(spacing: 6) {
                         Image(systemName: playing ? "pause.fill" : "play.fill")
                             .font(.system(size: 12, weight: .bold))
+                            .symbolEffect(.bounce, value: playing)
                         Text(playing ? "暂停" : "跟着走")
                             .font(.system(size: 15, weight: .bold))
                     }
@@ -209,7 +212,7 @@ struct LyricsView: View {
                     .padding(.vertical, 14)
                     .background(RoundedRectangle(cornerRadius: 17, style: .continuous).fill(Color.white))
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(StridePressButtonStyle(scale: 0.96, pressedOpacity: 0.9, haptic: .medium))
 
                 Button {
                     elapsed = 0
@@ -221,8 +224,9 @@ struct LyricsView: View {
                         .frame(width: 50, height: 48)
                         .background(RoundedRectangle(cornerRadius: 17, style: .continuous).fill(Palette.cardHigh))
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.stridePress)
             }
+            .animation(.snappy(duration: 0.2), value: playing)
         }
         .padding(14)
         .card(radius: 22, fill: Palette.card, stroke: Palette.stroke)

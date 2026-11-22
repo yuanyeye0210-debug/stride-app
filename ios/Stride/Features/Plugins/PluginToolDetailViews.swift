@@ -401,15 +401,19 @@ private struct SleepAudioToolView: View {
                             .padding(.vertical, 14)
                             .background(RoundedRectangle(cornerRadius: 14).fill(scene == item ? Palette.purple : Palette.card))
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.stridePress)
                 }
             }
+            .animation(.snappy(duration: 0.2), value: scene)
+            .sensoryFeedback(.selection, trigger: scene)
 
             VStack(spacing: 6) {
                 Text(scene).font(.system(size: 18, weight: .bold)).foregroundStyle(Palette.text)
                 Text(PluginMath.formatDuration(Double(secLeft)))
                     .font(.system(size: 48, weight: .heavy, design: .rounded))
                     .foregroundStyle(Palette.purple)
+                    .monospacedDigit()
+                    .numericRoll(value: secLeft, countsDown: true)
                 Text(running ? "定时倒计时中（本机助眠引导）" : "选好时长点开始")
                     .font(.system(size: 12))
                     .foregroundStyle(Palette.textDim)
@@ -531,13 +535,16 @@ private struct PodcastToolView: View {
                             Image(systemName: on ? "pause.circle.fill" : "play.circle.fill")
                                 .font(.system(size: 28))
                                 .foregroundStyle(on ? Palette.green : Palette.text)
+                                .symbolEffect(.bounce, value: on)
                         }
                         .padding(14)
                         .card(radius: 18, fill: Palette.card, stroke: Palette.stroke)
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.strideCard(radius: 18))
                 }
             }
+            .animation(.snappy(duration: 0.2), value: playingID)
+            .sensoryFeedback(.selection, trigger: playingID)
             .padding(Metrics.page)
         }
     }
@@ -828,6 +835,7 @@ private struct WatermarkStudioToolView: View {
         .sheet(isPresented: $showShare) {
             if let exportedImage {
                 ShareSheet(items: [exportedImage])
+                    .strideSheetDetents([.medium, .large])
             }
         }
     }

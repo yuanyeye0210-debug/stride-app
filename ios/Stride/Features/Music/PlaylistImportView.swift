@@ -152,7 +152,7 @@ struct PlaylistImportView: View {
                     .padding(.vertical, 13)
                     .background(RoundedRectangle(cornerRadius: 15, style: .continuous).fill(Color.white))
             }
-            .buttonStyle(.plain)
+            .buttonStyle(StridePressButtonStyle(scale: 0.97, pressedOpacity: 0.9, haptic: .medium))
             .disabled(!PlaylistParser.looksLikeLink(link))
             .opacity(PlaylistParser.looksLikeLink(link) ? 1 : 0.4)
 
@@ -214,7 +214,7 @@ struct PlaylistImportView: View {
                     .padding(.vertical, 12)
                     .background(RoundedRectangle(cornerRadius: 14).fill(Palette.cardHigh))
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.stridePress)
             .disabled(trackText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
         }
         .padding(16)
@@ -264,7 +264,7 @@ struct PlaylistImportView: View {
                     .padding(.vertical, 12)
                     .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Color.white))
             }
-            .buttonStyle(.plain)
+            .buttonStyle(StridePressButtonStyle(scale: 0.97, pressedOpacity: 0.9, haptic: .medium))
             .padding(.top, 4)
         }
         .padding(16)
@@ -294,16 +294,19 @@ struct PlaylistImportView: View {
                         }
                         Spacer()
                         Button {
-                            playlists.items.removeAll { $0.id == item.id }
+                            withAnimation(.snappy(duration: 0.22)) {
+                                playlists.items.removeAll { $0.id == item.id }
+                            }
                         } label: {
                             Image(systemName: "trash")
                                 .font(.system(size: 12))
                                 .foregroundStyle(Palette.textFaint)
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(.stridePress)
                     }
                     .padding(.vertical, 5)
                 }
+                .animation(.snappy(duration: 0.22), value: playlists.items.count)
             }
         }
         .padding(16)

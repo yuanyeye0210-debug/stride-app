@@ -61,7 +61,7 @@ struct HomeWidgetManagerSheet: View {
                                     }
                                     .font(.system(size: 13, weight: .semibold))
                                     .foregroundStyle(Palette.green)
-                                    .buttonStyle(.plain)
+                                    .buttonStyle(.stridePress)
                                 }
                                 .listRowBackground(Palette.card)
                             }
@@ -93,6 +93,7 @@ struct HomeWidgetManagerSheet: View {
             }
         }
         .preferredColorScheme(.dark)
+        .sensoryFeedback(.selection, trigger: store.visibleHomeWidgets)
     }
 }
 
@@ -129,6 +130,8 @@ struct SupplementSheet: View {
             }
         }
         .preferredColorScheme(.dark)
+        .sensoryFeedback(.success, trigger: store.takenSupplementIDs())
+        .sensoryFeedback(.selection, trigger: store.state.supplements.count)
     }
 
     private var todayChecklistSection: some View {
@@ -145,6 +148,7 @@ struct SupplementSheet: View {
                     }
                     .font(.system(size: 12.5, weight: .semibold))
                     .foregroundStyle(Palette.purple)
+                    .buttonStyle(.stridePress)
                 }
             }
 
@@ -167,6 +171,7 @@ struct SupplementSheet: View {
                                     Image(systemName: isDone ? "checkmark.circle.fill" : "circle")
                                         .font(.system(size: 20))
                                         .foregroundStyle(isDone ? Palette.green : Palette.purple)
+                                        .symbolEffect(.bounce, value: isDone)
                                     VStack(alignment: .leading, spacing: 2) {
                                         Text(item.name)
                                             .font(.system(size: 15, weight: .semibold))
@@ -178,7 +183,7 @@ struct SupplementSheet: View {
                                     Spacer()
                                 }
                             }
-                            .buttonStyle(.plain)
+                            .buttonStyle(.strideRow(radius: 12))
 
                             Button(role: .destructive) {
                                 store.removeSupplement(id: item.id)
@@ -188,7 +193,7 @@ struct SupplementSheet: View {
                                     .foregroundStyle(Palette.textFaint)
                                     .padding(8)
                             }
-                            .buttonStyle(.plain)
+                            .buttonStyle(.stridePress)
                         }
                         .padding(13)
                         .card(radius: 16, fill: Palette.card, stroke: Palette.stroke)
@@ -223,11 +228,12 @@ struct SupplementSheet: View {
                             Image(systemName: added ? "checkmark" : "plus")
                                 .font(.system(size: 12, weight: .bold))
                                 .foregroundStyle(added ? Palette.green : Palette.purple)
+                                .symbolEffect(.bounce, value: added)
                         }
                         .padding(12)
                         .card(radius: 15, fill: added ? Palette.cardSoft : Palette.card, stroke: Palette.stroke)
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.strideCard(radius: 15))
                     .disabled(added)
                 }
             }
@@ -328,6 +334,7 @@ struct CaffeineSheet: View {
             }
         }
         .preferredColorScheme(.dark)
+        .sensoryFeedback(.impact(weight: .medium), trigger: todayEntries.count)
     }
 
     private var summaryCard: some View {
@@ -366,7 +373,7 @@ struct CaffeineSheet: View {
                         .padding(12)
                         .card(radius: 15, fill: Palette.card, stroke: Palette.stroke)
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.strideCard(radius: 15))
                 }
             }
         }
@@ -442,6 +449,7 @@ struct CaffeineSheet: View {
                 .padding(.horizontal, 16)
                 .padding(.vertical, 11)
                 .background(RoundedRectangle(cornerRadius: 12).fill(Palette.amber))
+                .buttonStyle(.stridePress)
             }
         }
         .padding(14)
@@ -473,7 +481,7 @@ struct CaffeineSheet: View {
                         Image(systemName: "xmark.circle.fill")
                             .foregroundStyle(Palette.textFaint)
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.stridePress)
                 }
                 .padding(12)
                 .card(radius: 14, fill: Palette.card, stroke: Palette.stroke)

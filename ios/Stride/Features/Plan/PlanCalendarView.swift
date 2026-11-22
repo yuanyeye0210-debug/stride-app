@@ -46,15 +46,19 @@ struct PlanCalendarView: View {
                 .padding(.vertical, 10)
                 .liquidGlassCapsule(tint: Color.black.opacity(0.55))
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.stridePress)
             .padding(.bottom, Metrics.floatingTabBottomInset + 8)
         }
         .sheet(item: $detailSession) { session in
             SessionDetailView(session: session)
+                .strideSheetDetents([.medium, .large])
         }
         .sheet(isPresented: $showSettings) {
             CalendarSettingsSheet()
+                .strideSheetDetents([.medium])
         }
+        .sensoryFeedback(.selection, trigger: selectedDate)
+        .sensoryFeedback(.selection, trigger: month)
     }
 
     // MARK: - 耗能四色图例
@@ -157,8 +161,9 @@ struct PlanCalendarView: View {
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
                     .fill(isSelected ? Palette.coralHi.opacity(0.14) : Color.clear)
             )
+            .animation(.snappy(duration: 0.2), value: selectedDate)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.strideRow(radius: 12))
     }
 
     private func monthCells(for monthDate: Date) -> [Date?] {
@@ -214,7 +219,7 @@ struct PlanCalendarView: View {
                         .padding(14)
                         .card(radius: 18, fill: Palette.card, stroke: Palette.stroke)
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.strideCard(radius: 18))
                 }
             }
         }

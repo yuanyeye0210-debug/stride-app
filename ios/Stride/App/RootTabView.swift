@@ -33,6 +33,8 @@ struct RootTabView: View {
     private func tab<Content: View>(_ tag: Int, @ViewBuilder content: () -> Content) -> some View {
         content()
             .opacity(selection == tag ? 1 : 0)
+            .scaleEffect(selection == tag ? 1.0 : 0.985)
+            .animation(.snappy(duration: 0.24), value: selection)
             .allowsHitTesting(selection == tag)
             .accessibilityHidden(selection != tag)
     }
@@ -65,6 +67,7 @@ private struct HomeChannelHostView: View {
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .animation(.snappy(duration: 0.24), value: channel)
 
             HomeTopSegmentBar(
                 channel: $channel,

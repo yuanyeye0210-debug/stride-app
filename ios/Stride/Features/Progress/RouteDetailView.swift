@@ -146,8 +146,9 @@ struct RouteDetailView: View {
             .background(
                 Capsule().fill(on ? Color.white : Palette.cardHigh)
             )
+            .animation(.snappy(duration: 0.2), value: on)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.stridePress)
     }
 
     private var shareButton: some View {
@@ -164,7 +165,7 @@ struct RouteDetailView: View {
                 .padding(.vertical, 15)
                 .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(Color.white))
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.stridePress)
 
             Button {
                 UIPasteboard.general.string = shareText
@@ -176,8 +177,9 @@ struct RouteDetailView: View {
                     .frame(width: 52, height: 50)
                     .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(Palette.cardHigh))
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.stridePress)
         }
+        .sensoryFeedback(.selection, trigger: run.style)
     }
 
     private var shareText: String {

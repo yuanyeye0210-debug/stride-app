@@ -159,7 +159,7 @@ struct TodayView: View {
             .background(Capsule().fill(Color.white.opacity(0.11)))
             .overlay(Capsule().strokeBorder(Color.white.opacity(0.14), lineWidth: 0.8))
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.stridePress)
     }
 
     // MARK: - Bento 行组装逻辑

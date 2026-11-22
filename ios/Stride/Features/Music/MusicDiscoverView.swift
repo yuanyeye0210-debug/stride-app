@@ -150,16 +150,19 @@ struct MusicDiscoverView: View {
                                 .frame(width: 34, height: 34)
                                 .background(Circle().fill(Palette.cardHigh))
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(.stridePress)
 
-                        Button { showSearch.toggle() } label: {
+                        Button {
+                            withAnimation(.snappy(duration: 0.2)) { showSearch.toggle() }
+                        } label: {
                             Image(systemName: "magnifyingglass")
                                 .font(.system(size: 13, weight: .bold))
                                 .foregroundStyle(Palette.text)
+                                .symbolEffect(.bounce, value: showSearch)
                                 .frame(width: 34, height: 34)
                                 .background(Circle().fill(Palette.cardHigh))
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(.stridePress)
 
                         Menu {
                             Button("精选歌单（本机内置）") { sourceMode = "精选歌单" }
@@ -225,13 +228,18 @@ struct MusicDiscoverView: View {
         }
         .sheet(isPresented: $showImportSheet) {
             NavigationStack { PlaylistImportView() }
+                .strideSheetDetents([.medium, .large])
         }
         .sheet(isPresented: $showLyricsSheet) {
             NavigationStack { LyricsView() }
+                .strideSheetDetents([.medium, .large])
         }
         .sheet(isPresented: $showFavoritesSheet) {
             MusicFavoritesSheet(playlists: hotCharts + recommended + workoutPlaylists, tracks: topTracks)
+                .strideSheetDetents([.medium, .large])
         }
+        .sensoryFeedback(.selection, trigger: activeTrack?.id)
+        .sensoryFeedback(.impact(weight: .light), trigger: isPlaying)
         .onChange(of: isPlaying) { _, playing in
             if playing, let track = activeTrack {
                 MetronomeAudioEngine.shared.start(bpm: track.bpm)
@@ -291,8 +299,9 @@ struct MusicDiscoverView: View {
                                         Image(systemName: fav ? "heart.fill" : "heart")
                                             .font(.system(size: 14, weight: .semibold))
                                             .foregroundStyle(fav ? Color(hex: 0xFA2D48) : Color.white.opacity(0.85))
+                                            .symbolEffect(.bounce, value: fav)
                                     }
-                                    .buttonStyle(.plain)
+                                    .buttonStyle(StridePressButtonStyle(scale: 0.85, pressedOpacity: 0.9, haptic: .light))
                                 }
 
                                 Spacer()
@@ -311,6 +320,8 @@ struct MusicDiscoverView: View {
                             activeTrack = DemoTrack(id: item.id, rank: 1, title: item.title, artist: item.sourceLabel, bpm: item.bpm, colors: item.colors)
                             isPlaying = true
                         }
+                        .scaleEffect(activeTrack?.id == item.id && isPlaying ? 0.98 : 1.0)
+                        .animation(.snappy(duration: 0.22), value: activeTrack?.id)
 
                         Text(item.title)
                             .font(.system(size: 14, weight: .semibold))
@@ -322,6 +333,7 @@ struct MusicDiscoverView: View {
                             .lineLimit(1)
                     }
                     .frame(width: w, alignment: .leading)
+                    .strideScrollDepth(minScale: 0.95, minOpacity: 0.85)
                 }
             }
             .padding(.horizontal, Metrics.page)
@@ -399,7 +411,7 @@ struct MusicDiscoverView: View {
                     .padding(14)
                     .card(radius: 16, fill: Palette.card, stroke: Palette.stroke)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.strideCard(radius: 16))
 
                 Button { showLyricsSheet = true } label: {
                     HStack {
@@ -410,7 +422,7 @@ struct MusicDiscoverView: View {
                     .padding(14)
                     .card(radius: 16, fill: Palette.card, stroke: Palette.stroke)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.strideCard(radius: 16))
             }
             .padding(.horizontal, Metrics.page)
         }
@@ -508,13 +520,14 @@ private struct MusicFavoritesSheet: View {
                                     } label: {
                                         Image(systemName: "heart.fill").foregroundStyle(Color(hex: 0xFA2D48))
                                     }
-                                    .buttonStyle(.plain)
+                                    .buttonStyle(StridePressButtonStyle(scale: 0.86, pressedOpacity: 0.9, haptic: .light))
                                 }
                                 .padding(12)
                                 .card(radius: 16, fill: Palette.card, stroke: Palette.stroke)
                             }
                         }
                         .padding(Metrics.page)
+                        .animation(.snappy(duration: 0.22), value: favLists.count)
                     }
                 }
             }

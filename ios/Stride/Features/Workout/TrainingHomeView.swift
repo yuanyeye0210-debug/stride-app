@@ -7,6 +7,7 @@ struct TrainingHomeView: View {
     @State private var showSession = false
     @State private var detail: WorkoutSession?
     @State private var showReorder = false
+    @State private var reorderToken = 0
     @State private var toast: String?
 
     var body: some View {
@@ -32,10 +33,13 @@ struct TrainingHomeView: View {
         }
         .sheet(item: $detail) { session in
             SessionDetailView(session: session)
+                .strideSheetDetents([.medium, .large])
         }
         .sheet(isPresented: $showReorder) {
             WeekReorderSheet()
+                .strideSheetDetents([.medium, .large])
         }
+        .sensoryFeedback(.success, trigger: reorderToken)
         .toast($toast)
     }
 
@@ -80,7 +84,7 @@ struct TrainingHomeView: View {
                     .padding(.vertical, 7)
                     .background(Capsule().fill(Palette.cardHigh))
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.stridePress)
             }
 
             if let plan = store.state.plan {
@@ -174,7 +178,7 @@ struct TrainingHomeView: View {
                 .padding(.vertical, 15)
                 .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(Color.white))
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.stridePress)
 
             Button {
                 draft = .empty()
@@ -186,7 +190,7 @@ struct TrainingHomeView: View {
                     .frame(width: 52, height: 50)
                     .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(Palette.cardHigh))
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.stridePress)
         }
     }
 
@@ -205,7 +209,8 @@ struct TrainingHomeView: View {
                     } label: {
                         SessionRow(session: session)
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.strideCard(radius: 18))
+                    .strideScrollDepth(minScale: 0.96, minOpacity: 0.85)
                     .contextMenu {
                         Button(role: .destructive) {
                             store.deleteSession(id: session.id)
@@ -221,6 +226,7 @@ struct TrainingHomeView: View {
     private func regenerate() {
         let p = store.state.profile
         store.setPlan(PlanGenerator.generate(goal: p.goal, days: p.daysPerWeek, experience: p.experience))
+        reorderToken += 1
         toast = "计划已按 \(p.goal.rawValue) / 每周 \(p.daysPerWeek) 练重排"
     }
 }

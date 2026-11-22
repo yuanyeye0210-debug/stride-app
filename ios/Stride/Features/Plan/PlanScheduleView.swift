@@ -56,7 +56,7 @@ struct PlanScheduleView: View {
                         .frame(width: 46, height: 46)
                         .liquidGlassCapsule(tint: Color.black.opacity(0.55))
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.stridePress)
 
                 Button(action: onCreateTemplate) {
                     Text("创建模板")
@@ -67,7 +67,7 @@ struct PlanScheduleView: View {
                         .background(Capsule().fill(Palette.yellow))
                         .shadow(color: .black.opacity(0.45), radius: 14, y: 6)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.stridePress)
             }
             .padding(.trailing, Metrics.page)
             .padding(.bottom, Metrics.floatingTabBottomInset + 8)
@@ -77,23 +77,28 @@ struct PlanScheduleView: View {
         }
         .sheet(isPresented: $showReorder) {
             PlanWeekReorderSheet()
+                .strideSheetDetents([.medium, .large])
         }
         .sheet(isPresented: $showRhythmSheet) {
             RhythmEditorSheet { toastMessage in toast = toastMessage }
+                .strideSheetDetents([.medium, .large])
         }
         .sheet(isPresented: $showGuideSheet) {
             PlanGuideSheet()
+                .strideSheetDetents([.medium, .large])
         }
         .sheet(isPresented: $showSearchSheet) {
             PersonalTemplateSearchSheet(templates: personalTemplates) { tpl in
                 selectedTemplate = tpl
             }
+            .strideSheetDetents([.medium, .large])
         }
         .sheet(item: $selectedTemplate) { tpl in
             WorkoutTemplateDetailSheet(template: tpl) { draft in
                 activeDraft = draft
                 showSession = true
             }
+            .strideSheetDetents([.medium, .large])
         }
         .sheet(item: Binding(
             get: { selectedDate.map { IdentifiableDate(date: $0) } },
@@ -103,7 +108,9 @@ struct PlanScheduleView: View {
                 activeDraft = draft
                 showSession = true
             }
+            .strideSheetDetents([.medium, .large])
         }
+        .sensoryFeedback(.selection, trigger: selectedDate)
         .confirmationDialog("这周的排法重复...", isPresented: $showRepeatDialog) {
             Button("重复 2 周") { store.state.planRepeatWeeks = 2; toast = "已设置重复 2 周" }
             Button("重复 4 周") { store.state.planRepeatWeeks = 4; toast = "已设置重复 4 周" }
@@ -167,7 +174,7 @@ struct PlanScheduleView: View {
                 .frame(width: 28, height: 28)
                 .background(Circle().fill(Color.white.opacity(0.45)))
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.stridePress)
     }
 
     private var moreScheduleMenu: some View {
@@ -426,7 +433,7 @@ struct PlanScheduleView: View {
             }
             .frame(maxWidth: .infinity)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.strideRow(radius: 10))
     }
 
     private func monthCells(for monthDate: Date) -> [Date?] {
@@ -472,7 +479,7 @@ struct PlanScheduleView: View {
             .padding(14)
             .card(radius: 20, fill: Palette.card, stroke: Palette.stroke)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.strideCard(radius: 20))
     }
 
     // MARK: - 个人训练模板 2 列海报网格（图 34）
@@ -486,7 +493,8 @@ struct PlanScheduleView: View {
                     } label: {
                         PersonalPosterCard(template: tpl)
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.strideCard)
+                    .strideScrollDepth(minScale: 0.96, minOpacity: 0.85)
                     .contextMenu {
                         Button {
                             activeDraft = SessionDraft(
@@ -793,9 +801,10 @@ private struct RhythmEditorSheet: View {
                                         .padding(.vertical, 10)
                                         .background(Capsule().fill(daysPerWeek == count ? Palette.yellow : Palette.cardSoft))
                                 }
-                                .buttonStyle(.plain)
+                                .buttonStyle(.stridePress)
                             }
                         }
+                        .sensoryFeedback(.selection, trigger: daysPerWeek)
 
                         Text("训练主目标")
                             .font(.system(size: 14, weight: .bold))
@@ -813,9 +822,10 @@ private struct RhythmEditorSheet: View {
                                         .padding(.vertical, 10)
                                         .background(Capsule().fill(goal == g ? Color.white : Palette.cardSoft))
                                 }
-                                .buttonStyle(.plain)
+                                .buttonStyle(.stridePress)
                             }
                         }
+                        .sensoryFeedback(.selection, trigger: goal)
                     }
                     .padding(16)
                     .card(radius: 20, fill: Palette.card, stroke: Palette.stroke)
@@ -933,7 +943,7 @@ private struct PersonalTemplateSearchSheet: View {
                                 .padding(14)
                                 .card(radius: 16, fill: Palette.card, stroke: Palette.stroke)
                             }
-                            .buttonStyle(.plain)
+                            .buttonStyle(.strideCard(radius: 16))
                         }
                     }
                     .padding(Metrics.page)

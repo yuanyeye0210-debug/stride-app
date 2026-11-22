@@ -44,6 +44,7 @@ struct PluginPlazaView: View {
                         Text("全部工具 · \(filteredPlugins.count)")
                             .font(.system(size: 15, weight: .bold))
                             .foregroundStyle(Palette.textDim)
+                            .numericRoll(value: filteredPlugins.count)
                         Spacer()
                         Button {
                             withAnimation(.snappy(duration: 0.2)) { showSearch.toggle() }
@@ -51,8 +52,9 @@ struct PluginPlazaView: View {
                             Image(systemName: showSearch ? "xmark.circle.fill" : "magnifyingglass")
                                 .font(.system(size: 15))
                                 .foregroundStyle(Palette.textDim)
+                                .symbolEffect(.bounce, value: showSearch)
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(.stridePress)
                     }
                     .padding(.horizontal, Metrics.page)
 
@@ -68,7 +70,8 @@ struct PluginPlazaView: View {
                                     installed: store.isPluginInstalled(item.id)
                                 )
                             }
-                            .buttonStyle(.plain)
+                            .buttonStyle(.strideCard(radius: 18))
+                            .strideScrollDepth(minScale: 0.96, minOpacity: 0.88)
                         }
                     }
                     .padding(.horizontal, Metrics.page)
@@ -86,6 +89,7 @@ struct PluginPlazaView: View {
         }
         .sheet(item: $selectedPlugin) { item in
             PluginToolHostSheet(plugin: item)
+                .strideSheetDetents([.medium, .large])
         }
         .sheet(item: Binding(
             get: { selectedCollection.map { CollectionWrapper(kind: $0) } },
@@ -98,6 +102,7 @@ struct PluginPlazaView: View {
                     selectedPlugin = plugin
                 }
             }
+            .strideSheetDetents([.medium, .large])
         }
     }
 
@@ -420,7 +425,7 @@ private struct PluginCollectionDetailSheet: View {
                                 .padding(14)
                                 .card(radius: 16, fill: Palette.card, stroke: Palette.stroke)
                             }
-                            .buttonStyle(.plain)
+                            .buttonStyle(.strideCard(radius: 16))
                         }
                     }
                     .padding(Metrics.page)

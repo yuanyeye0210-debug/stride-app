@@ -5,6 +5,7 @@ import SwiftUI
 struct MuscleRecoveryBentoCard: View {
     let items: [MuscleRecoveryItem]
     var onTap: () -> Void
+    @State private var barsAppeared = false
 
     private var recommendedName: String {
         items.first(where: \.isRecommended)?.group.rawValue ?? "肩"
@@ -35,7 +36,7 @@ struct MuscleRecoveryBentoCard: View {
                     ForEach(items) { item in
                         VStack(spacing: 5) {
                             GeometryReader { geo in
-                                let ratio = CGFloat(max(8, min(100, item.percent))) / 100.0
+                                let ratio = barsAppeared ? CGFloat(max(8, min(100, item.percent))) / 100.0 : 0.0
                                 let barColor: Color = {
                                     if item.isRecommended { return Palette.lime }
                                     if item.percent >= 70 { return Palette.green }
@@ -47,6 +48,7 @@ struct MuscleRecoveryBentoCard: View {
                                     RoundedRectangle(cornerRadius: 6, style: .continuous)
                                         .fill(barColor)
                                         .frame(height: geo.size.height * ratio)
+                                        .animation(.spring(response: 0.62, dampingFraction: 0.8), value: barsAppeared)
                                 }
                                 .overlay(
                                     RoundedRectangle(cornerRadius: 6, style: .continuous)
@@ -74,7 +76,12 @@ struct MuscleRecoveryBentoCard: View {
             .frame(height: 178)
             .card(radius: Metrics.radius, fill: Palette.card, stroke: Palette.stroke)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.strideCard)
+        .onAppear {
+            withAnimation(.spring(response: 0.62, dampingFraction: 0.8)) {
+                barsAppeared = true
+            }
+        }
     }
 }
 
@@ -105,7 +112,7 @@ struct CaffeineBentoCard: View {
                         .frame(width: 28, height: 28)
                         .background(Circle().fill(Color.white.opacity(0.12)))
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.stridePress)
                 .accessibilityLabel("记一杯咖啡因")
             }
 
@@ -114,6 +121,7 @@ struct CaffeineBentoCard: View {
                     Text("\(todayMg)")
                         .font(.system(size: 22, weight: .bold, design: .rounded))
                         .foregroundStyle(todayMg > limitMg ? Palette.amber : Palette.text)
+                        .numericRoll(value: todayMg)
                     Text("/ \(limitMg) 毫克")
                         .font(.system(size: 11, weight: .medium))
                         .foregroundStyle(Palette.textDim)
@@ -254,6 +262,7 @@ struct FoodReceiptBentoCard: View {
                     Text(WaterLog.grouped(eatenKcal))
                         .font(.system(size: 13.5, weight: .heavy, design: .monospaced))
                         .foregroundStyle(Color(hex: 0x18181B))
+                        .numericRoll(value: eatenKcal)
                 }
 
                 HStack {
@@ -264,6 +273,7 @@ struct FoodReceiptBentoCard: View {
                     Text(WaterLog.grouped(abs(remainingKcal)))
                         .font(.system(size: 12, weight: .bold, design: .monospaced))
                         .foregroundStyle(remainingKcal >= 0 ? Palette.green : Palette.coral)
+                        .numericRoll(value: remainingKcal)
                 }
 
                 Spacer(minLength: 0)
@@ -289,7 +299,7 @@ struct FoodReceiptBentoCard: View {
                     .background(Circle().fill(Color(hex: 0x0F0F12)))
                     .shadow(color: .black.opacity(0.25), radius: 5, y: 2)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.stridePress)
             .padding(10)
             .accessibilityLabel("记一餐")
         }
@@ -385,7 +395,7 @@ struct ActivityRingsBentoCard: View {
             .frame(height: 178)
             .card(radius: Metrics.radius, fill: Palette.card, stroke: Palette.stroke)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.strideCard)
         .accessibilityLabel("今日活动三环")
     }
 }
@@ -411,6 +421,7 @@ struct MonthlyHoursBentoCard: View {
                         Text(String(format: "%.1f", hours))
                             .font(.system(size: 30, weight: .heavy, design: .rounded))
                             .foregroundStyle(Palette.yellow)
+                            .numericRoll(value: hours)
                         Text("H")
                             .font(.system(size: 14, weight: .bold, design: .rounded))
                             .foregroundStyle(Palette.text)
@@ -418,6 +429,7 @@ struct MonthlyHoursBentoCard: View {
                         Text("\(count) 次")
                             .font(.system(size: 10.5, weight: .medium))
                             .foregroundStyle(Palette.textFaint)
+                            .numericRoll(value: count)
                     }
                 }
                 .padding(16)
@@ -431,7 +443,7 @@ struct MonthlyHoursBentoCard: View {
             .card(radius: Metrics.radius, fill: Palette.card, stroke: Palette.stroke)
             .clipShape(RoundedRectangle(cornerRadius: Metrics.radius, style: .continuous))
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.strideCard)
     }
 }
 

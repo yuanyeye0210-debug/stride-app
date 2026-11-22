@@ -86,6 +86,7 @@ struct ProgressViewScreen: View {
         }
         .sheet(isPresented: $showGallerySheet) {
             PhotoGallerySheet()
+                .strideSheetDetents([.medium, .large])
         }
         .sheet(isPresented: $showFoodScan) {
             FoodScanView(startWithPhotoPicker: foodStartWithCamera)
@@ -284,13 +285,14 @@ struct ProgressViewScreen: View {
                             .frame(width: 28, height: 28)
                             .background(Circle().fill(Color.white.opacity(0.09)))
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.stridePress)
                 }
 
                 HStack(alignment: .firstTextBaseline, spacing: 3) {
                     Text("\(waterMl)")
                         .font(.system(size: 22, weight: .bold, design: .rounded))
                         .foregroundStyle(Palette.text)
+                        .numericRoll(value: waterMl)
                     Text("/ \(waterGoal) ml")
                         .font(.system(size: 11))
                         .foregroundStyle(Palette.blue)
@@ -467,7 +469,7 @@ struct ProgressViewScreen: View {
             .padding(18)
             .card(radius: 24, fill: Palette.card, stroke: Palette.stroke)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.strideCard)
     }
 
     // MARK: - 体重记录卡片
@@ -489,6 +491,7 @@ struct ProgressViewScreen: View {
                     Text(String(format: "%.1f kg", current))
                         .font(.system(size: 28, weight: .heavy, design: .rounded))
                         .foregroundStyle(Palette.text)
+                        .numericRoll(value: current)
                     Text(String(format: "本周 %+.1f kg", delta))
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundStyle(delta <= 0 ? Palette.green : Palette.amber)
@@ -511,7 +514,7 @@ struct ProgressViewScreen: View {
             .padding(18)
             .card(radius: 24, fill: Palette.card, stroke: Palette.stroke)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.strideCard)
     }
 
     // MARK: - 睡眠月相卡
@@ -751,7 +754,8 @@ struct TrainingAndRoutesDetailView: View {
                             .card(radius: 20, fill: Palette.card, stroke: Palette.stroke)
                             .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(.strideCard(radius: 20))
+                        .strideScrollDepth(minScale: 0.96, minOpacity: 0.85)
                     }
                 }
             }

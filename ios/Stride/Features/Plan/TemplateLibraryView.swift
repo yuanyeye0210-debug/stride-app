@@ -38,7 +38,7 @@ struct TemplateLibraryView: View {
                 .background(Capsule().fill(Color.white.opacity(0.94)))
                 .shadow(color: .black.opacity(0.45), radius: 14, y: 6)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.stridePress)
             .padding(.trailing, Metrics.page)
             .padding(.bottom, Metrics.floatingTabBottomInset + 8)
         }
@@ -47,20 +47,24 @@ struct TemplateLibraryView: View {
                 activeDraft = draft
                 showSession = true
             }
+            .strideSheetDetents([.medium, .large])
         }
         .sheet(item: $selectedWeekPlan) { weekTpl in
             WeekPlanTemplateDetailSheet(template: weekTpl) { msg in
                 toast = msg
             }
+            .strideSheetDetents([.medium, .large])
         }
         .sheet(item: $selectedRunProgram) { runTpl in
             RunProgramDetailSheet(program: runTpl) { msg in
                 toast = msg
             }
+            .strideSheetDetents([.medium, .large])
         }
         .sheet(isPresented: $showSession, onDismiss: { activeDraft = nil }) {
             SessionView(draft: activeDraft ?? .empty())
         }
+        .sensoryFeedback(.selection, trigger: selectedCategory)
         .toast($toast)
     }
 
@@ -86,7 +90,7 @@ struct TemplateLibraryView: View {
                                 Capsule().strokeBorder(active ? .clear : Palette.stroke, lineWidth: 0.8)
                             )
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.stridePress)
                 }
             }
             .padding(.horizontal, Metrics.page)
@@ -130,7 +134,7 @@ struct TemplateLibraryView: View {
                             WeekPlanCard(template: plan)
                                 .frame(width: 172)
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(.strideCard)
                     }
                 }
                 .padding(.horizontal, Metrics.page)
@@ -145,7 +149,7 @@ struct TemplateLibraryView: View {
                             RunProgramCompactCard(program: prog)
                                 .frame(width: 264)
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(.strideCard)
                     }
                 }
                 .padding(.horizontal, Metrics.page)
@@ -169,7 +173,7 @@ struct TemplateLibraryView: View {
                                     SingleTemplateCard(template: tpl)
                                         .frame(width: 172)
                                 }
-                                .buttonStyle(.plain)
+                                .buttonStyle(.strideCard)
                             }
                         }
                         .padding(.horizontal, Metrics.page)
@@ -205,7 +209,7 @@ struct TemplateLibraryView: View {
                 .font(.system(size: 12.5, weight: .medium))
                 .foregroundStyle(Palette.textDim)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.stridePress)
         }
         .padding(.horizontal, Metrics.page)
     }
@@ -302,7 +306,8 @@ struct TemplateLibraryView: View {
                         Button { selectedRunProgram = prog } label: {
                             RunProgramBannerCard(program: prog)
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(.strideCard)
+                        .strideScrollDepth(minScale: 0.96, minOpacity: 0.85)
                     }
                     .padding(.horizontal, Metrics.page)
                 }
@@ -754,7 +759,7 @@ struct MyCustomTemplatesSheet: View {
                             .padding(.vertical, 15)
                             .liquidGlassCapsule(tint: Color.white.opacity(0.08))
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(.stridePress)
 
                         if store.state.customTemplates.isEmpty {
                             VStack(spacing: 10) {
@@ -791,7 +796,7 @@ struct MyCustomTemplatesSheet: View {
                                         Image(systemName: "trash")
                                             .foregroundStyle(Palette.red)
                                     }
-                                    .buttonStyle(.plain)
+                                    .buttonStyle(.stridePress)
                                 }
                                 .padding(14)
                                 .card(radius: 16, fill: Palette.bg.opacity(0.45), stroke: Palette.stroke)

@@ -186,6 +186,8 @@ struct HomeTopSegmentBar: View {
             .sensoryFeedback(.selection, trigger: channel)
 
             contextTrailingButton
+                .transition(.scale(scale: 0.72).combined(with: .opacity))
+                .animation(.spring(response: 0.3, dampingFraction: 0.78), value: channel)
         }
         .padding(.horizontal, Metrics.page)
         .padding(.top, 6)
@@ -196,7 +198,7 @@ struct HomeTopSegmentBar: View {
         switch channel {
         case .home, .plugins:
             AIGlowCircleButton(action: onAI)
-                .buttonStyle(.stridePress)
+                .id("ai")
         case .music:
             Button(action: onFavoriteMusic) {
                 Image(systemName: "heart")
@@ -206,6 +208,7 @@ struct HomeTopSegmentBar: View {
                     .liquidGlassCapsule(tint: Color.black.opacity(0.45))
             }
             .buttonStyle(.stridePress)
+            .id("music")
             .accessibilityLabel("音乐收藏与歌词")
         case .run:
             Button(action: onQuickRun) {
@@ -216,6 +219,7 @@ struct HomeTopSegmentBar: View {
                     .liquidGlassCapsule(tint: Color.black.opacity(0.45))
             }
             .buttonStyle(.stridePress)
+            .id("run")
             .accessibilityLabel("快速开始跑步")
         }
     }
@@ -223,6 +227,7 @@ struct HomeTopSegmentBar: View {
 
 struct AIGlowCircleButton: View {
     var action: () -> Void
+    @State private var glowPulse = false
 
     var body: some View {
         Button(action: action) {
@@ -242,7 +247,8 @@ struct AIGlowCircleButton: View {
                     )
                     .frame(width: 48, height: 48)
                     .blur(radius: 5)
-                    .opacity(0.75)
+                    .opacity(glowPulse ? 0.85 : 0.58)
+                    .scaleEffect(glowPulse ? 1.06 : 0.94)
 
                 Circle()
                     .fill(
@@ -271,7 +277,12 @@ struct AIGlowCircleButton: View {
             }
             .frame(width: 46, height: 46)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(StridePressButtonStyle(scale: 0.92, pressedOpacity: 0.92, haptic: .medium))
+        .onAppear {
+            withAnimation(.easeInOut(duration: 2.6).repeatForever(autoreverses: true)) {
+                glowPulse = true
+            }
+        }
         .accessibilityLabel("打开 AI 教练")
     }
 }
