@@ -2,7 +2,7 @@ import Foundation
 import UIKit
 import ImageIO
 
-// MARK: - 57 核心真人视频动作库模型与缓存
+// MARK: - 77 核心真人视频动作库模型与缓存
 
 /// 来自 `exercises_catalog.json`（全员 720p CC0 真人循环视频 + 解剖肌群图 + 简体中文步骤）的标准化动作条目。
 struct CatalogExercise: Identifiable, Codable, Hashable {

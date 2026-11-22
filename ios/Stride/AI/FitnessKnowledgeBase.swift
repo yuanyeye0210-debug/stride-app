@@ -229,7 +229,7 @@ enum FitnessKnowledgeBase {
             .map(\.entry)
     }
 
-    /// 组装注入给大模型的「专业健身知识库 + 57 核心真人视频动作库」RAG 参考上下文。
+    /// 组装注入给大模型的「专业健身知识库 + 77 核心真人视频动作库」RAG 参考上下文。
     static func ragContext(for query: String) -> String {
         let matchedKnowledge = retrieve(for: query, limit: 3)
         let matchedExercises = Array(ExerciseCatalogStore.shared.filter(query: query, bodyPart: nil, equipment: nil).prefix(2))
