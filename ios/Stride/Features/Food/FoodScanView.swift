@@ -19,9 +19,14 @@ struct FoodScanView: View {
 
     @State private var scanMode: FoodScanMode = .meal
     @State private var showBarcodeScanner = false
+    @State private var showCameraPicker = false
     @State private var pickerItem: PhotosPickerItem?
     @State private var showAutoPicker = false
     @State private var didAutoPresentPicker = false
+    @State private var previewImage: UIImage?
+    @State private var scanStageText: String = ""
+    @State private var scanLinePhase = false
+    @State private var isolatedOutline = false
     @State private var items: [FoodItem] = []
     @State private var meal: Meal = .lunch
     @State private var busy = false
@@ -75,6 +80,16 @@ struct FoodScanView: View {
                 }
             }
             .photosPicker(isPresented: $showAutoPicker, selection: $pickerItem, matching: .images, photoLibrary: .shared())
+            .sheet(isPresented: $showCameraPicker) {
+                SafeCameraPicker { image in
+                    Task { await processImage(image) }
+                } onUnavailable: {
+                    errorText = "当前设备无可用相机，已切换为相册选择"
+                    showAutoPicker = true
+                } onClose: {
+                    showCameraPicker = false
+                }
+            }
             .sheet(isPresented: $showBarcodeScanner) {
                 BarcodeScannerSheet { code in
                     Task { await handleBarcode(code) }
@@ -181,35 +196,99 @@ struct FoodScanView: View {
         .disabled(busy)
     }
 
-    // MARK: - 拍照
+    // MARK: - 拍照与可视化食物抠图描边识别
 
     private var photoCard: some View {
-        PhotosPicker(selection: $pickerItem, matching: .images, photoLibrary: .shared()) {
-            VStack(spacing: 10) {
-                if busy {
-                    ProgressView()
-                        .tint(Palette.green)
-                    // 有重试时显示第几次重试，替代“正在识别…”。
-                    Text(retryAttempt.map { AIRetryPolicy.retryStatusText(nextAttempt: $0) ?? "重试中…" } ?? "正在识别…")
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundStyle(Palette.textDim)
-                } else {
-                    Image(systemName: scanMode == .label ? "doc.text.viewfinder" : "camera.fill")
-                        .font(.system(size: 26, weight: .light))
-                        .foregroundStyle(Palette.text)
-                    Text(scanMode == .label ? "拍营养成分表 / 选一张" : "拍一张 / 选一张")
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(Palette.text)
-                    Text(scanMode == .label ? "拍包装背面“营养成分表”即可自动换算每 100g 热量" : "拍盘子比拍单个食物更准")
-                        .font(.system(size: 12))
-                        .foregroundStyle(Palette.textFaint)
+        VStack(spacing: 12) {
+            if let previewImage {
+                ZStack(alignment: .topLeading) {
+                    Image(uiImage: previewImage)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(height: 220)
+                        .frame(maxWidth: .infinity)
+                        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+                        .overlay {
+                            if busy {
+                                GeometryReader { geo in
+                                    Rectangle()
+                                        .fill(
+                                            LinearGradient(
+                                                colors: [.clear, Palette.green.opacity(0.65), .clear],
+                                                startPoint: .top,
+                                                endPoint: .bottom
+                                            )
+                                        )
+                                        .frame(height: 28)
+                                        .offset(y: scanLinePhase ? geo.size.height - 28 : 0)
+                                        .animation(.easeInOut(duration: 1.1).repeatForever(autoreverses: true), value: scanLinePhase)
+                                }
+                                .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+                            }
+                        }
+
+                    HStack(spacing: 6) {
+                        if busy {
+                            ProgressView()
+                                .scaleEffect(0.75)
+                                .tint(Color.white)
+                        } else {
+                            Image(systemName: isolatedOutline ? "sparkles" : "checkmark.circle.fill")
+                                .font(.system(size: 11, weight: .bold))
+                                .foregroundStyle(Palette.green)
+                        }
+                        Text(busy ? scanStageText : (isolatedOutline ? "食物区域已描边 · 背景已马赛克" : "视觉识别完成"))
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(Color.white)
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(Capsule().fill(Color.black.opacity(0.68)))
+                    .padding(10)
                 }
             }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 34)
-            .card(radius: 24, fill: Palette.cardSoft, stroke: Palette.stroke)
+
+            HStack(spacing: 10) {
+                Button {
+                    showCameraPicker = true
+                } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: "camera.fill")
+                            .font(.system(size: 16, weight: .semibold))
+                        Text(scanMode == .label ? "拍营养表" : "拍一张")
+                            .font(.system(size: 14.5, weight: .bold))
+                    }
+                    .foregroundStyle(Color.black)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 15)
+                    .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(Palette.green))
+                }
+                .buttonStyle(.stridePress)
+                .disabled(busy)
+
+                PhotosPicker(selection: $pickerItem, matching: .images, photoLibrary: .shared()) {
+                    HStack(spacing: 8) {
+                        Image(systemName: "photo.on.rectangle")
+                            .font(.system(size: 16, weight: .semibold))
+                        Text("从相册选")
+                            .font(.system(size: 14.5, weight: .semibold))
+                    }
+                    .foregroundStyle(Palette.text)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 15)
+                    .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(Palette.cardSoft))
+                    .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(Palette.stroke, lineWidth: 1))
+                }
+                .disabled(busy)
+            }
+
+            Text(scanMode == .label ? "拍包装背面“营养成分表”即可自动换算每 100g 热量" : "拍照后自动检测食物轮廓、背景马赛克隔离并识别克重与营养")
+                .font(.system(size: 11.5))
+                .foregroundStyle(Palette.textFaint)
+                .multilineTextAlignment(.center)
         }
-        .disabled(busy)
+        .padding(14)
+        .card(radius: 24, fill: Palette.card, stroke: Palette.stroke)
     }
 
     private func errorCard(_ text: String) -> some View {
@@ -392,6 +471,19 @@ struct FoodScanView: View {
 
     private func handle(_ item: PhotosPickerItem?) async {
         guard let item else { return }
+        do {
+            guard let data = try await item.loadTransferable(type: Data.self),
+                  let image = UIImage(data: data) else {
+                errorText = "读不到这张图"
+                return
+            }
+            await processImage(image)
+        } catch {
+            errorText = error.localizedDescription
+        }
+    }
+
+    private func processImage(_ rawImage: UIImage) async {
         errorText = nil
         guard ai.isConfigured else {
             errorText = "当前离线或 AI 服务暂不可用，您可以先手动添加食物记录。"
@@ -403,24 +495,40 @@ struct FoodScanView: View {
         }
 
         busy = true
-        defer { busy = false; retryAttempt = nil }
+        isolatedOutline = false
+        previewImage = rawImage
+        scanStageText = scanMode == .label ? "1/2 正在校准营养成分表…" : "1/3 正在检测食物主体轮廓…"
+        scanLinePhase = true
+        defer {
+            busy = false
+            retryAttempt = nil
+            scanLinePhase = false
+        }
+
+        var imageForAI = rawImage
+        if scanMode == .meal {
+            let isolated = await FoodSubjectIsolator.isolateFood(from: rawImage)
+            previewImage = isolated.previewImage
+            isolatedOutline = isolated.isolatedSubjectFound
+            imageForAI = isolated.previewImage
+            scanStageText = isolated.isolatedSubjectFound
+                ? "2/3 已描出食物并马赛克背景 · Gemini 分析克重与营养…"
+                : "2/3 正在发送焦点区域至 Gemini 分析克重与营养…"
+        } else {
+            scanStageText = "2/2 Gemini 正在解析营养成分与热量…"
+        }
 
         do {
-            guard let data = try await item.loadTransferable(type: Data.self),
-                  let image = UIImage(data: data) else {
-                errorText = "读不到这张图"
-                return
-            }
-            // @State 的 setter 是 nonmutating，直接在回调里赋值即可。
             let result = if scanMode == .label {
-                try await FoodRecognition.estimateNutritionLabel(image: image, config: ai.config, onRetry: { retryAttempt = $0 })
+                try await FoodRecognition.estimateNutritionLabel(image: imageForAI, config: ai.config, onRetry: { retryAttempt = $0 })
             } else {
-                try await FoodRecognition.estimate(image: image, config: ai.config, onRetry: { retryAttempt = $0 })
+                try await FoodRecognition.estimate(image: imageForAI, config: ai.config, onRetry: { retryAttempt = $0 })
             }
             items = result
             recognizedByAI = true
             store.state.quotas.bump("food")
             store.saveNow()
+            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
         } catch {
             errorText = error.localizedDescription
         }
