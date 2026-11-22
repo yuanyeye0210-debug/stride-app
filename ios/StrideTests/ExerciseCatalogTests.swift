@@ -3,14 +3,12 @@ import XCTest
 
 final class ExerciseCatalogTests: XCTestCase {
 
-    func testCatalogLoadsAllExercisesWith57HDVideosAndPosters() {
+    func testCatalogIs100PercentHDRealVideoExercises() {
         let store = ExerciseCatalogStore.shared
-        XCTAssertGreaterThanOrEqual(store.all.count, 708, "融合后动作库条目数应不少于 708")
+        XCTAssertEqual(store.all.count, 57, "方案 C 应精简为 57 个核心真人视频动作")
+        XCTAssertTrue(store.all.allSatisfy { $0.hasVideo }, "动作库中每个动作都必须具备 720p 真人视频，禁止静态充数条目")
 
-        let videoItems = store.all.filter { $0.hasVideo }
-        XCTAssertEqual(videoItems.count, 57, "应完整包含 57 个 720p 高清循环视频动作")
-
-        for item in videoItems {
+        for item in store.all {
             let urlStr = item.videoURL?.absoluteString ?? ""
             XCTAssertTrue(urlStr.hasPrefix("https://cdn.jsdelivr.net/gh/namnq/workout-free-videos@v2.0.0/media/video/") && urlStr.hasSuffix(".mp4"), "\(item.id) 视频 URL 不合法: \(urlStr)")
             XCTAssertFalse((item.localThumb ?? "").isEmpty, "\(item.id) 缺少内置封面名")
@@ -18,31 +16,31 @@ final class ExerciseCatalogTests: XCTestCase {
             XCTAssertFalse((item.nameZH ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, "\(item.id) 缺少中文动作名")
             XCTAssertFalse(item.steps.isEmpty, "\(item.id) 应包含中文执行步骤")
         }
-
-        for item in store.all {
-            XCTAssertFalse((item.nameZH ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, "\(item.id) 缺少中文动作名")
-            XCTAssertFalse(item.steps.isEmpty, "\(item.id) 应包含中文执行步骤")
-        }
-
-        let dualFrameCount = store.all.filter { $0.isAnimatedPair }.count
-        XCTAssertGreaterThanOrEqual(dualFrameCount, 500, "RepDB 双帧动作数应不少于 500 个")
     }
 
-    func testChineseAndVideoOnlyFiltering() {
+    func testDynamicFiltersHaveNoEmptyTabsAndSupportChineseSearch() {
         let store = ExerciseCatalogStore.shared
 
-        XCTAssertEqual(store.filter(query: "", bodyPart: nil, equipment: nil, videoOnly: true).count, 57)
-
-        let chestBarbell = store.filter(query: "", bodyPart: "chest", equipment: "barbell")
-        XCTAssertFalse(chestBarbell.isEmpty)
-        XCTAssertTrue(chestBarbell.allSatisfy { $0.bodyPart == "chest" && $0.equipment == "barbell" })
-
-        for kw in ["卧推", "深蹲", "硬拉", "引体", "臀推"] {
-            let matched = store.filter(query: kw, bodyPart: nil, equipment: nil, videoOnly: true)
-            XCTAssertFalse(matched.isEmpty, "高清视频模式下应支持中文关键词检索「\(kw)」")
+        XCTAssertFalse(store.availableBodyParts.isEmpty)
+        for part in store.availableBodyParts {
+            let items = store.filter(query: "", bodyPart: part, equipment: nil)
+            XCTAssertFalse(items.isEmpty, "部位筛选「\(part)」不应为空分类")
+            XCTAssertTrue(items.allSatisfy { $0.bodyPart == part })
         }
 
-        let converted = store.filter(query: "卧推", bodyPart: nil, equipment: nil, videoOnly: true).first?.toExercise()
+        XCTAssertFalse(store.availableEquipments.isEmpty)
+        for eq in store.availableEquipments {
+            let items = store.filter(query: "", bodyPart: nil, equipment: eq)
+            XCTAssertFalse(items.isEmpty, "器械筛选「\(eq)」不应为空分类")
+            XCTAssertTrue(items.allSatisfy { $0.equipment == eq })
+        }
+
+        for kw in ["卧推", "深蹲", "硬拉", "引体", "臀推", "划船", "推举"] {
+            let matched = store.filter(query: kw, bodyPart: nil, equipment: nil)
+            XCTAssertFalse(matched.isEmpty, "精简动作库应支持中文关键词检索「\(kw)」")
+        }
+
+        let converted = store.filter(query: "卧推", bodyPart: nil, equipment: nil).first?.toExercise()
         XCTAssertNotNil(converted)
         XCTAssertFalse(converted?.name.isEmpty ?? true)
     }

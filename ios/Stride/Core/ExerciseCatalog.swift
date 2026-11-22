@@ -2,9 +2,9 @@ import Foundation
 import UIKit
 import ImageIO
 
-// MARK: - 743 动作全量高清视频与图解动作库模型与缓存
+// MARK: - 57 核心真人视频动作库模型与缓存
 
-/// 来自 `exercises_catalog.json`（含 720p CC0 高清循环视频 + RepDB 512px 高清矢量双帧）的标准化动作条目。
+/// 来自 `exercises_catalog.json`（全员 720p CC0 真人循环视频 + 解剖肌群图 + 简体中文步骤）的标准化动作条目。
 struct CatalogExercise: Identifiable, Codable, Hashable {
     let id: String
     let name: String
@@ -298,6 +298,22 @@ final class ExerciseCatalogStore {
     static let shared = ExerciseCatalogStore()
 
     let all: [CatalogExercise]
+
+    var availableBodyParts: [String] {
+        let present = Set(all.map(\.bodyPart))
+        let ordered = CatalogExercise.bodyPartOrder.filter { present.contains($0) }
+        let extra = present.subtracting(ordered).sorted()
+        return ordered + extra
+    }
+
+    var availableEquipments: [String] {
+        let present = Set(all.map(\.equipment))
+        let preferred = CatalogExercise.equipmentQuickFilters.filter { present.contains($0) }
+        let extra = present.subtracting(preferred).sorted {
+            CatalogExercise.equipmentName($0) < CatalogExercise.equipmentName($1)
+        }
+        return preferred + extra
+    }
 
     init(bundle: Bundle = .main) {
         self.all = Self.loadCatalog(bundle: bundle)

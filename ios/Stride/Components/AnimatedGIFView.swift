@@ -323,7 +323,7 @@ struct ExerciseThumbView: View {
                     Image(uiImage: poster)
                         .resizable()
                         .scaledToFill()
-                        .frame(width: 88, height: 50)
+                        .frame(width: 96, height: 54)
                         .clipped()
                 } else {
                     Image(systemName: "video.fill")
@@ -343,12 +343,21 @@ struct ExerciseThumbView: View {
                     .frame(width: 24, height: 24)
                     .background(Circle().fill(Color.black.opacity(0.55)))
             }
-            .frame(width: 88, height: 50)
+            .frame(width: 96, height: 54)
             .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
                     .strokeBorder(Palette.stroke, lineWidth: 0.8)
             )
+            .overlay(alignment: .bottomTrailing) {
+                Text("720p")
+                    .font(.system(size: 8.5, weight: .bold, design: .rounded))
+                    .foregroundStyle(Color.white.opacity(0.95))
+                    .padding(.horizontal, 4)
+                    .padding(.vertical, 1.5)
+                    .background(RoundedRectangle(cornerRadius: 4, style: .continuous).fill(Color.black.opacity(0.65)))
+                    .padding(4)
+            }
         } else {
             ZStack {
                 RoundedRectangle(cornerRadius: 13, style: .continuous)

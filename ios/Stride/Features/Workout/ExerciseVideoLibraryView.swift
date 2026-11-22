@@ -13,36 +13,19 @@ struct ExerciseVideoLibraryView: View {
     @State private var query = ""
     @State private var selectedBodyPart: String? = nil
     @State private var selectedEquipment: String? = nil
-    @State private var videoOnly = true
     @State private var detailExercise: CatalogExercise?
     @State private var startSessionDraft: SessionDraft?
 
     @Namespace private var partNS
-    @Namespace private var modeNS
 
     private let catalog = ExerciseCatalogStore.shared
-
-    private var videoCount: Int {
-        catalog.all.filter { $0.hasVideo }.count
-    }
 
     private var filtered: [CatalogExercise] {
         catalog.filter(
             query: query,
             bodyPart: selectedBodyPart,
-            equipment: selectedEquipment,
-            videoOnly: videoOnly
+            equipment: selectedEquipment
         )
-    }
-
-    private var allMatchesCount: Int {
-        guard videoOnly else { return filtered.count }
-        return catalog.filter(
-            query: query,
-            bodyPart: selectedBodyPart,
-            equipment: selectedEquipment,
-            videoOnly: false
-        ).count
     }
 
     var body: some View {
@@ -55,7 +38,6 @@ struct ExerciseVideoLibraryView: View {
                         headerSummary
                     }
 
-                    videoModeBar
                     searchBar
                     bodyPartFilterBar
                     equipmentFilterBar
@@ -63,31 +45,11 @@ struct ExerciseVideoLibraryView: View {
                     resultsCountBar
 
                     if filtered.isEmpty {
-                        VStack(spacing: 12) {
-                            EmptyHint(
-                                icon: "magnifyingglass",
-                                title: "没有匹配的动作",
-                                message: videoOnly
-                                    ? "当前仅显示 720p 真人视频动作，试试切换为「全部动作」或调整筛选条件。"
-                                    : "试试搜英文关键词（如 bench、squat）或切换上方的部位与器械筛选。"
-                            )
-
-                            if videoOnly && allMatchesCount > 0 {
-                                Button {
-                                    withAnimation(.spring(response: 0.32, dampingFraction: 0.8)) {
-                                        videoOnly = false
-                                    }
-                                } label: {
-                                    Text("在全部动作中查看（\(allMatchesCount) 个动作）")
-                                        .font(.system(size: 13.5, weight: .bold))
-                                        .foregroundStyle(Color.black)
-                                        .padding(.horizontal, 18)
-                                        .padding(.vertical, 10)
-                                        .background(Capsule().fill(Color.white))
-                                }
-                                .buttonStyle(.stridePress)
-                            }
-                        }
+                        EmptyHint(
+                            icon: "magnifyingglass",
+                            title: "没有匹配的动作",
+                            message: "试试搜中文/英文动作名（如 卧推、深蹲、bench）或切换上方的部位与器械筛选。"
+                        )
                         .padding(.top, 24)
                     } else {
                         LazyVStack(spacing: 10) {
@@ -97,7 +59,7 @@ struct ExerciseVideoLibraryView: View {
                             }
                         }
 
-                        Text("720p 视频来源 CC0 公共领域 · 高清矢量与肌群图由 RepDB (repdb.co) 提供")
+                        Text("720p 真人视频来源 CC0 公共领域 · 肌群解剖图由 RepDB (repdb.co) 提供")
                             .font(.system(size: 11))
                             .foregroundStyle(Palette.textFaint)
                             .multilineTextAlignment(.center)
@@ -158,64 +120,18 @@ struct ExerciseVideoLibraryView: View {
                     .font(.system(size: 28, weight: .bold))
                     .foregroundStyle(Palette.text)
                 Spacer()
-                Text("\(catalog.all.count) 动作")
+                Text("\(catalog.all.count) 个真人视频")
                     .font(.system(size: 12, weight: .bold, design: .rounded))
                     .foregroundStyle(Palette.green)
                     .padding(.horizontal, 10)
                     .padding(.vertical, 5)
                     .background(Capsule().fill(Palette.green.opacity(0.14)))
             }
-            Text("720p 真人循环视频示范（支持 0.5× 慢放与离线秒播）")
+            Text("精选核心力量与拉伸动作 · 全员 720p 真人循环视频（支持 0.5× 慢放）")
                 .font(.system(size: 12.5))
                 .foregroundStyle(Palette.textDim)
         }
         .padding(.top, 4)
-    }
-
-    private var videoModeBar: some View {
-        HStack(spacing: 6) {
-            videoModePill(
-                title: "高清视频 (\(videoCount))",
-                icon: "video.fill",
-                isVideoOnly: true
-            )
-            videoModePill(
-                title: "全部动作 (\(catalog.all.count))",
-                icon: "square.grid.2x2",
-                isVideoOnly: false
-            )
-        }
-        .padding(4)
-        .background(Capsule().fill(Palette.card))
-        .overlay(Capsule().strokeBorder(Palette.stroke, lineWidth: 1))
-        .sensoryFeedback(.selection, trigger: videoOnly)
-    }
-
-    private func videoModePill(title: String, icon: String, isVideoOnly: Bool) -> some View {
-        let active = videoOnly == isVideoOnly
-        return Button {
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                videoOnly = isVideoOnly
-            }
-        } label: {
-            HStack(spacing: 6) {
-                Image(systemName: icon)
-                    .font(.system(size: 11.5, weight: .bold))
-                Text(title)
-                    .font(.system(size: 13, weight: active ? .bold : .semibold))
-            }
-            .foregroundStyle(active ? Color.black : Palette.textDim)
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 8)
-            .background {
-                if active {
-                    Capsule()
-                        .fill(Color.white)
-                        .matchedGeometryEffect(id: "exerciseVideoModePill", in: modeNS)
-                }
-            }
-        }
-        .buttonStyle(.stridePress)
     }
 
     private var searchBar: some View {
@@ -251,7 +167,7 @@ struct ExerciseVideoLibraryView: View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
                 partChip(title: "全部部位", value: nil)
-                ForEach(CatalogExercise.bodyPartOrder, id: \.self) { part in
+                ForEach(catalog.availableBodyParts, id: \.self) { part in
                     partChip(title: CatalogExercise.bodyPartName(part), value: part)
                 }
             }
@@ -289,7 +205,7 @@ struct ExerciseVideoLibraryView: View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 7) {
                 equipChip(title: "全部器械", value: nil)
-                ForEach(CatalogExercise.equipmentQuickFilters, id: \.self) { eq in
+                ForEach(catalog.availableEquipments, id: \.self) { eq in
                     equipChip(title: CatalogExercise.equipmentName(eq), value: eq)
                 }
             }
@@ -372,17 +288,12 @@ struct ExerciseVideoLibraryView: View {
                     }
 
                     HStack(spacing: 6) {
-                        if item.hasVideo {
-                            badge("720p 视频", tint: Palette.green)
-                        }
                         badge(item.bodyPartZH, tint: item.muscleGroup.tint)
                         badge(item.equipmentZH, tint: Palette.textDim)
-                        if !item.hasVideo {
-                            Text(item.difficultyZH.map { "\(item.targetZH) · \($0)" } ?? item.targetZH)
-                                .font(.system(size: 11))
-                                .foregroundStyle(Palette.textFaint)
-                                .lineLimit(1)
-                        }
+                        Text(item.difficultyZH.map { "\(item.targetZH) · \($0)" } ?? item.targetZH)
+                            .font(.system(size: 11))
+                            .foregroundStyle(Palette.textFaint)
+                            .lineLimit(1)
                     }
                 }
 
@@ -392,15 +303,15 @@ struct ExerciseVideoLibraryView: View {
                     Button {
                         detailExercise = item
                     } label: {
-                        Image(systemName: (item.hasVideo || item.isAnimatedPair) ? "play.circle.fill" : "photo.circle.fill")
+                        Image(systemName: "play.circle.fill")
                             .font(.system(size: 22))
-                            .foregroundStyle(item.hasVideo ? Palette.green : Palette.blue)
+                            .foregroundStyle(Palette.green)
                     }
                     .buttonStyle(.stridePress)
                 } else {
-                    Image(systemName: (item.hasVideo || item.isAnimatedPair) ? "play.circle.fill" : "photo.circle.fill")
+                    Image(systemName: "play.circle.fill")
                         .font(.system(size: 20))
-                        .foregroundStyle(item.hasVideo ? Palette.green : Palette.textDim)
+                        .foregroundStyle(Palette.green)
                 }
             }
             .padding(12)
@@ -411,10 +322,7 @@ struct ExerciseVideoLibraryView: View {
             Button {
                 detailExercise = item
             } label: {
-                Label(
-                    item.hasVideo ? "观看 720p 动作示范视频" : (item.isAnimatedPair ? "观看高清双帧示范" : "查看高清动作图解"),
-                    systemImage: (item.hasVideo || item.isAnimatedPair) ? "play.rectangle.fill" : "photo"
-                )
+                Label("观看 720p 动作示范视频", systemImage: "play.rectangle.fill")
             }
             if let onPick {
                 Button {
@@ -565,7 +473,7 @@ struct ExerciseVideoDetailSheet: View {
                         }
                         .buttonStyle(.stridePress)
 
-                        Text("720p 视频来源 CC0 公共领域 · 高清矢量与肌群图由 RepDB (repdb.co) 提供")
+                        Text("720p 真人视频来源 CC0 公共领域 · 肌群解剖图由 RepDB (repdb.co) 提供")
                             .font(.system(size: 11))
                             .foregroundStyle(Palette.textFaint)
                             .multilineTextAlignment(.center)
