@@ -305,41 +305,80 @@ struct ExerciseGIFPlayerView: View {
     }
 }
 
-/// 列表行内轻量高速下采样缩略图（适配 512px 高清 WebP）。
+/// 列表行内轻量高速缩略图（视频条目展示 16:9 内置电影感封面；静态条目展示 512px 高清矢量下采样图）。
 struct ExerciseThumbView: View {
     let url: URL?
+    var localThumb: String? = nil
+    var hasVideo: Bool = false
 
     @State private var image: UIImage?
 
     var body: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: 13, style: .continuous)
-                .fill(Color(hex: 0xD7F0FC))
+        if hasVideo {
+            ZStack {
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(Color(hex: 0x1A1A1E))
 
-            if let image {
-                Image(uiImage: image)
-                    .resizable()
-                    .scaledToFill()
-                    .frame(width: 56, height: 56)
-                    .clipped()
-                    .transition(.opacity)
-            } else {
-                Image(systemName: "figure.strengthtraining.traditional")
-                    .font(.system(size: 18, weight: .medium))
-                    .foregroundStyle(Color.black.opacity(0.35))
+                if let poster = CatalogExercise.bundleThumbImage(named: localThumb) ?? image {
+                    Image(uiImage: poster)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: 88, height: 50)
+                        .clipped()
+                } else {
+                    Image(systemName: "video.fill")
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundStyle(Palette.textDim)
+                }
+
+                LinearGradient(
+                    colors: [.clear, .black.opacity(0.45)],
+                    startPoint: .center,
+                    endPoint: .bottom
+                )
+
+                Image(systemName: "play.fill")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundStyle(Color.white)
+                    .frame(width: 24, height: 24)
+                    .background(Circle().fill(Color.black.opacity(0.55)))
             }
-        }
-        .frame(width: 56, height: 56)
-        .clipShape(RoundedRectangle(cornerRadius: 13, style: .continuous))
-        .task(id: url) {
-            guard let url, image == nil else { return }
-            if let result = try? await ExerciseMediaCache.loadData(from: url) {
-                let decoded = await Task.detached(priority: .utility) {
-                    ExerciseMediaCache.decodeDownsampled(data: result.data, maxPixelSize: 180)
-                }.value
-                if let decoded {
-                    withAnimation(.easeOut(duration: 0.16)) {
-                        self.image = decoded
+            .frame(width: 88, height: 50)
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .strokeBorder(Palette.stroke, lineWidth: 0.8)
+            )
+        } else {
+            ZStack {
+                RoundedRectangle(cornerRadius: 13, style: .continuous)
+                    .fill(Color(hex: 0xD7F0FC))
+
+                if let image {
+                    Image(uiImage: image)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: 56, height: 56)
+                        .clipped()
+                        .transition(.opacity)
+                } else {
+                    Image(systemName: "figure.strengthtraining.traditional")
+                        .font(.system(size: 18, weight: .medium))
+                        .foregroundStyle(Color.black.opacity(0.35))
+                }
+            }
+            .frame(width: 56, height: 56)
+            .clipShape(RoundedRectangle(cornerRadius: 13, style: .continuous))
+            .task(id: url) {
+                guard let url, image == nil else { return }
+                if let result = try? await ExerciseMediaCache.loadData(from: url) {
+                    let decoded = await Task.detached(priority: .utility) {
+                        ExerciseMediaCache.decodeDownsampled(data: result.data, maxPixelSize: 180)
+                    }.value
+                    if let decoded {
+                        withAnimation(.easeOut(duration: 0.16)) {
+                            self.image = decoded
+                        }
                     }
                 }
             }

@@ -2,9 +2,9 @@ import Foundation
 import UIKit
 import ImageIO
 
-// MARK: - 708 动作全量高清动作库模型与缓存
+// MARK: - 743 动作全量高清视频与图解动作库模型与缓存
 
-/// 来自 `exercises_catalog.json`（RepDB 512px 高清矢量双帧）的标准化动作条目（含高清起止图、肌群解剖图与简体中文步骤）。
+/// 来自 `exercises_catalog.json`（含 720p CC0 高清循环视频 + RepDB 512px 高清矢量双帧）的标准化动作条目。
 struct CatalogExercise: Identifiable, Codable, Hashable {
     let id: String
     let name: String
@@ -19,8 +19,33 @@ struct CatalogExercise: Identifiable, Codable, Hashable {
     let thumb: String
     let muscleImage: String?
     let difficulty: String?
+    let video: String?
+    let localThumb: String?
 
     static let cdnBase = "https://cdn.jsdelivr.net/gh/RepDB/exercise-dataset@main/"
+
+    var videoURL: URL? {
+        guard let video, !video.isEmpty else { return nil }
+        if video.hasPrefix("http://") || video.hasPrefix("https://") {
+            return URL(string: video)
+        }
+        return URL(string: Self.cdnBase + video)
+    }
+
+    var hasVideo: Bool { videoURL != nil }
+
+    static func bundleThumbImage(named name: String?) -> UIImage? {
+        guard let name, !name.isEmpty else { return nil }
+        let bundles = [Bundle.main, Bundle(for: ExerciseCatalogStore.self)]
+        for bundle in bundles {
+            if let url = bundle.url(forResource: name, withExtension: "jpg")
+                ?? bundle.url(forResource: name, withExtension: "jpg", subdirectory: "VideoThumbs"),
+               let image = UIImage(contentsOfFile: url.path) {
+                return image
+            }
+        }
+        return nil
+    }
 
     var gifURL: URL? {
         guard !gif.isEmpty else { return nil }
@@ -183,13 +208,16 @@ struct CatalogExercise: Identifiable, Codable, Hashable {
         case "band", "resistance band": return "弹力带"
         case "assisted": return "辅助器械"
         case "weighted": return "负重片"
-        case "plates": return "杠铃片"
-        case "flat bench": return "训练凳"
+        case "plates", "plate": return "杠铃片"
+        case "flat bench", "bench": return "训练凳"
         case "pull up bar": return "单杠"
-        case "dip station": return "双杠"
+        case "dip station", "dipBars": return "双杠"
         case "rings": return "体操吊环"
         case "suspension trainer": return "TRX 悬挂带"
-        case "ab wheel", "wheel roller", "roller": return "健腹轮"
+        case "ab wheel": return "健腹轮"
+        case "foam roller", "roller": return "泡沫轴/滚轴"
+        case "wheel roller": return "健腹轮/滚轴"
+        case "lacrosse ball", "lacrosse": return "筋膜球"
         case "stability ball": return "瑞士球"
         case "bosu ball": return "波速球"
         case "medicine ball": return "药球"
@@ -255,6 +283,9 @@ struct CatalogExercise: Identifiable, Codable, Hashable {
         case "serratus anterior", "serratus_anterior": return "前锯肌"
         case "levator scapulae": return "肩胛提肌"
         case "full_body": return "全身肌群"
+        case "it_band": return "髂胫束"
+        case "plantar_fascia": return "足底筋膜"
+        case "neck": return "颈部肌群"
         case "cardiovascular system": return "心肺耐力"
         default: return raw
         }
@@ -285,9 +316,12 @@ final class ExerciseCatalogStore {
         return []
     }
 
-    func filter(query: String, bodyPart: String?, equipment: String?) -> [CatalogExercise] {
+    func filter(query: String, bodyPart: String?, equipment: String?, videoOnly: Bool = false) -> [CatalogExercise] {
         let q = query.trimmingCharacters(in: .whitespacesAndNewlines)
         return all.filter { item in
+            if videoOnly && !item.hasVideo {
+                return false
+            }
             if let bodyPart, !bodyPart.isEmpty, item.bodyPart != bodyPart {
                 return false
             }
