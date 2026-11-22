@@ -6,17 +6,32 @@ import Foundation
 enum CoachEngine {
 
     static let systemPrompt = """
-    你是一名严谨的力量训练教练，中文回答，说话直接、不客套。
+    你是「步迹 Stride」的私人力量与体能教练，用简体中文与用户自然交流，风格专业、真诚、有温度、像真私教一样懂人话。
     规则：
-    1. 只基于用户给出的训练记录做判断，不知道就说不知道，不要编数据。
-    2. 建议必须具体到重量、次数、组数或时长。
-    3. 提到风险时给替代动作，不说"建议就医"这类废话除非用户描述的是锐痛。
-    4. 回答控制在 120 字以内，必要时用短句分点。
+    1. 若用户只是打招呼（如“你好”“在吗”“早”）、闲聊或表达情绪，请自然友好回应并简要引导今天可以聊什么，不要生硬罗列数字或强行下命令。
+    2. 后台状态里的今日摄入或训练如果为 0，先结合当前时间段判断（例如凌晨/上午尚未记录或还没吃早饭是正常的），切勿在对方只打招呼时误判为空腹异常或命令对方“马上吃几千大卡”。
+    3. 当用户询问具体训练、配重、饮食缺口、伤病替代或恢复问题时，才结合后台真实记录给出科学、可落地的建议（尽量给出动作、重量、组次或替代方案），不要编造不存在的记录。
+    4. 结合上下文连续对话，表达清晰简洁（日常问答 40–180 字即可，复杂规划可分点说明）。
     """
 
     static func context(store: AppStore) -> String {
         let p = store.state.profile
         var lines: [String] = []
+        let timeFormatter = DateFormatter()
+        timeFormatter.locale = Locale(identifier: "zh_CN")
+        timeFormatter.dateFormat = "HH:mm"
+        let hour = Calendar.current.component(.hour, from: Date())
+        let period: String = {
+            switch hour {
+            case 0..<5: return "凌晨"
+            case 5..<9: return "早上"
+            case 9..<12: return "上午"
+            case 12..<14: return "中午"
+            case 14..<18: return "下午"
+            default: return "晚上"
+            }
+        }()
+        lines.append("当前本地时间：\(timeFormatter.string(from: Date()))（\(period)）")
         let body = String(format: "%.0fcm / %.1fkg", p.heightCm, p.weightKg)
         lines.append("用户：\(p.nickname)，\(p.age) 岁，\(body)，目标 \(p.goal.rawValue)，经验 \(p.experience.rawValue)，每周 \(p.daysPerWeek) 练。")
         if !p.injuryAvoidAreas.isEmpty {
@@ -80,13 +95,29 @@ enum CoachEngine {
 
         if config.isConfigured {
             do {
-                let full = "以下是用户当前状态：\n\(context(store: store))\n\n用户说：\(text)"
-                let answer = try await AIClient.chat(
-                    system: systemPrompt,
-                    user: full,
+                let enrichedSystem = """
+                \(systemPrompt)
+
+                【用户后台档案与今日实时状态（仅作参考，请结合时间段自然使用）】
+                \(context(store: store))
+                """
+                let historyTurns = store.state.chats.dropLast().suffix(8)
+                var conversation: [AIClient.Message] = historyTurns.map { turn in
+                    AIClient.Message(
+                        role: turn.role == .coach ? "assistant" : "user",
+                        content: .text(turn.text)
+                    )
+                }
+                conversation.append(AIClient.Message(role: "user", content: .text(text)))
+
+                let selectedUseCase = useCase(for: text)
+                let answer = try await AIClient.complete(
+                    system: enrichedSystem,
+                    messages: conversation,
+                    model: selectedUseCase.primaryGeminiModel,
                     config: config,
-                    useCase: useCase(for: text),
-                    maxTokens: 600,
+                    useCase: selectedUseCase,
+                    maxTokens: 900,
                     onRetry: onRetry
                 )
                 return (answer, true, candidatePlan)

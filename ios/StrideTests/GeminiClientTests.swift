@@ -17,7 +17,7 @@ final class GeminiClientTests: XCTestCase {
         XCTAssertEqual(CoachEngine.useCase(for: "帮我分析一下最近四周分化训练周期与瓶颈"), .coachDeepAnalysis)
 
         let chatChain = AIClient.geminiModelCandidates(primary: "", useCase: .coachChat)
-        XCTAssertEqual(chatChain, ["gemini-flash-lite-latest", "gemini-flash-latest", "gemini-3.8-flash"])
+        XCTAssertEqual(chatChain, ["gemini-flash-latest", "gemini-3.8-flash", "gemini-flash-lite-latest"])
 
         let deepChain = AIClient.geminiModelCandidates(primary: "", useCase: .coachDeepAnalysis)
         XCTAssertEqual(deepChain.first, "gemini-pro-latest")

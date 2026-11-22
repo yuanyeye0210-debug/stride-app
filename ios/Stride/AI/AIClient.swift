@@ -57,7 +57,7 @@ enum AIUseCase: Equatable {
     var geminiModelChain: [String] {
         switch self {
         case .coachChat:
-            return ["gemini-flash-lite-latest", "gemini-flash-latest", "gemini-3.8-flash"]
+            return ["gemini-flash-latest", "gemini-3.8-flash", "gemini-flash-lite-latest"]
         case .coachDeepAnalysis:
             return ["gemini-pro-latest", "gemini-flash-latest", "gemini-flash-lite-latest"]
         case .foodVision:
