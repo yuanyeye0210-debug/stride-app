@@ -185,7 +185,7 @@ enum CoachEngine {
             return "今天暂无固定安排。推荐要么做 20 分钟 Zone 2 快走 + 关节活动度，要么开一节推/拉/腿自选训练。"
         }
 
-        // 优先从本机 24 条专业运动科学知识库 + 1,324 动作库做 RAG 检索回答
+        // 优先从本机 24 条专业运动科学知识库 + 708 高清动作库做 RAG 检索回答
         let matchedKnowledge = FitnessKnowledgeBase.retrieve(for: text, limit: 2)
         let matchedExercises = Array(ExerciseCatalogStore.shared.filter(query: text, bodyPart: nil, equipment: nil).prefix(1))
 

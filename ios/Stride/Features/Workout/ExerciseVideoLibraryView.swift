@@ -58,6 +58,12 @@ struct ExerciseVideoLibraryView: View {
                                     .strideScrollDepth(minScale: 0.96, minOpacity: 0.88)
                             }
                         }
+
+                        Text("高清动作图库由 RepDB (repdb.co) 提供")
+                            .font(.system(size: 11))
+                            .foregroundStyle(Palette.textFaint)
+                            .frame(maxWidth: .infinity, alignment: .center)
+                            .padding(.top, 8)
                     }
                 }
                 .padding(.horizontal, Metrics.page)
@@ -120,7 +126,7 @@ struct ExerciseVideoLibraryView: View {
                     .padding(.vertical, 5)
                     .background(Capsule().fill(Palette.green.opacity(0.14)))
             }
-            Text("覆盖全器械与肌群的循环示范动画与简体中文动作要领")
+            Text("512px 高清双帧示范、目标肌群解剖图与简体中文要领")
                 .font(.system(size: 12.5))
                 .foregroundStyle(Palette.textDim)
         }
@@ -273,10 +279,17 @@ struct ExerciseVideoLibraryView: View {
                         .lineLimit(2)
                         .multilineTextAlignment(.leading)
 
+                    if item.displayTitle != item.name {
+                        Text(item.name)
+                            .font(.system(size: 11.5))
+                            .foregroundStyle(Palette.textFaint)
+                            .lineLimit(1)
+                    }
+
                     HStack(spacing: 6) {
                         badge(item.bodyPartZH, tint: item.muscleGroup.tint)
                         badge(item.equipmentZH, tint: Palette.textDim)
-                        Text(item.targetZH)
+                        Text(item.difficultyZH.map { "\(item.targetZH) · \($0)" } ?? item.targetZH)
                             .font(.system(size: 11))
                             .foregroundStyle(Palette.textFaint)
                             .lineLimit(1)
@@ -289,13 +302,13 @@ struct ExerciseVideoLibraryView: View {
                     Button {
                         detailExercise = item
                     } label: {
-                        Image(systemName: "play.circle.fill")
+                        Image(systemName: item.isAnimatedPair ? "play.circle.fill" : "photo.circle.fill")
                             .font(.system(size: 22))
                             .foregroundStyle(Palette.blue)
                     }
                     .buttonStyle(.stridePress)
                 } else {
-                    Image(systemName: "play.circle.fill")
+                    Image(systemName: item.isAnimatedPair ? "play.circle.fill" : "photo.circle.fill")
                         .font(.system(size: 20))
                         .foregroundStyle(Palette.textDim)
                 }
@@ -308,7 +321,7 @@ struct ExerciseVideoLibraryView: View {
             Button {
                 detailExercise = item
             } label: {
-                Label("观看动作示范动画", systemImage: "play.rectangle.fill")
+                Label(item.isAnimatedPair ? "观看高清双帧示范" : "查看高清动作图解", systemImage: item.isAnimatedPair ? "play.rectangle.fill" : "photo")
             }
             if let onPick {
                 Button {
@@ -347,34 +360,51 @@ struct ExerciseVideoDetailSheet: View {
 
                 ScrollView(showsIndicators: false) {
                     VStack(alignment: .leading, spacing: 16) {
-                        ExerciseGIFPlayerView(url: exercise.gifURL)
-                            .frame(height: 270)
+                        ExerciseGIFPlayerView(startURL: exercise.startImageURL, peakURL: exercise.peakImageURL)
+                            .frame(height: 300)
 
                         VStack(alignment: .leading, spacing: 6) {
                             Text(exercise.displayTitle)
                                 .font(.system(size: 21, weight: .bold))
                                 .foregroundStyle(Palette.text)
 
+                            if exercise.displayTitle != exercise.name {
+                                Text(exercise.name)
+                                    .font(.system(size: 13))
+                                    .foregroundStyle(Palette.textFaint)
+                            }
+
                             HStack(spacing: 8) {
                                 tagPill("部位：\(exercise.bodyPartZH)", color: exercise.muscleGroup.tint)
-                                tagPill("目标：\(exercise.targetZH)", color: Palette.blue)
                                 tagPill("器械：\(exercise.equipmentZH)", color: Palette.amber)
+                                if let diff = exercise.difficultyZH {
+                                    tagPill("难度：\(diff)", color: Palette.purple)
+                                }
                             }
                         }
 
-                        if !exercise.secondary.isEmpty {
+                        HStack(spacing: 14) {
+                            ExerciseMuscleBadgeView(url: exercise.muscleImageURL)
+
                             VStack(alignment: .leading, spacing: 6) {
-                                Text("协同发力肌群")
+                                Text("目标与协同肌群")
                                     .font(.system(size: 13, weight: .semibold))
                                     .foregroundStyle(Palette.textDim)
-                                Text(exercise.secondary.map(CatalogExercise.targetName).joined(separator: " · "))
-                                    .font(.system(size: 13.5))
+                                Text("主练：\(exercise.targetZH)")
+                                    .font(.system(size: 14.5, weight: .bold))
                                     .foregroundStyle(Palette.text)
+                                if !exercise.secondary.isEmpty {
+                                    Text("协同：\(exercise.secondary.map(CatalogExercise.targetName).joined(separator: " · "))")
+                                        .font(.system(size: 12.5))
+                                        .foregroundStyle(Palette.textDim)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                }
                             }
-                            .padding(14)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .card(radius: 16, fill: Palette.card, stroke: Palette.stroke)
+                            Spacer(minLength: 0)
                         }
+                        .padding(14)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .card(radius: 16, fill: Palette.card, stroke: Palette.stroke)
 
                         VStack(alignment: .leading, spacing: 10) {
                             Text("动作执行步骤")
@@ -399,6 +429,30 @@ struct ExerciseVideoDetailSheet: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .card(radius: 18, fill: Palette.card, stroke: Palette.stroke)
 
+                        if let tips = exercise.tips, !tips.isEmpty {
+                            VStack(alignment: .leading, spacing: 10) {
+                                Text("动作要领与避坑提示")
+                                    .font(.system(size: 15, weight: .bold))
+                                    .foregroundStyle(Palette.text)
+
+                                ForEach(tips, id: \.self) { tip in
+                                    HStack(alignment: .top, spacing: 9) {
+                                        Image(systemName: "lightbulb.fill")
+                                            .font(.system(size: 13))
+                                            .foregroundStyle(Palette.amber)
+                                            .padding(.top, 2)
+                                        Text(tip)
+                                            .font(.system(size: 13.5))
+                                            .foregroundStyle(Palette.textDim)
+                                            .fixedSize(horizontal: false, vertical: true)
+                                    }
+                                }
+                            }
+                            .padding(15)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .card(radius: 18, fill: Palette.card, stroke: Palette.stroke)
+                        }
+
                         Button {
                             onPickOrStart()
                         } label: {
@@ -413,6 +467,11 @@ struct ExerciseVideoDetailSheet: View {
                             .background(RoundedRectangle(cornerRadius: 20, style: .continuous).fill(Palette.green))
                         }
                         .buttonStyle(.stridePress)
+
+                        Text("高清动作图库由 RepDB (repdb.co) 提供")
+                            .font(.system(size: 11))
+                            .foregroundStyle(Palette.textFaint)
+                            .frame(maxWidth: .infinity, alignment: .center)
                     }
                     .padding(Metrics.page)
                     .padding(.bottom, 20)

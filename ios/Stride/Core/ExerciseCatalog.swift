@@ -1,21 +1,26 @@
 import Foundation
 import UIKit
+import ImageIO
 
-// MARK: - 1,324 动作全量视频动作库模型与缓存
+// MARK: - 708 动作全量高清动作库模型与缓存
 
-/// 来自 `exercises_catalog.json` 的标准化动作条目（含示范动图、缩略图与简体中文步骤）。
+/// 来自 `exercises_catalog.json`（RepDB 512px 高清矢量双帧）的标准化动作条目（含高清起止图、肌群解剖图与简体中文步骤）。
 struct CatalogExercise: Identifiable, Codable, Hashable {
     let id: String
     let name: String
+    let nameZH: String?
     let bodyPart: String
     let equipment: String
     let target: String
     let secondary: [String]
     let steps: [String]
+    let tips: [String]?
     let gif: String
     let thumb: String
+    let muscleImage: String?
+    let difficulty: String?
 
-    static let cdnBase = "https://cdn.jsdelivr.net/gh/hasaneyldrm/exercises-dataset@main/"
+    static let cdnBase = "https://cdn.jsdelivr.net/gh/RepDB/exercise-dataset@main/"
 
     var gifURL: URL? {
         guard !gif.isEmpty else { return nil }
@@ -27,13 +32,39 @@ struct CatalogExercise: Identifiable, Codable, Hashable {
         return URL(string: Self.cdnBase + thumb)
     }
 
-    /// 常见核心动作中文别称（便于国内用户直接搜中文动作名）。
+    var startImageURL: URL? { thumbURL }
+
+    var peakImageURL: URL? {
+        guard !gif.isEmpty, gif != thumb else { return nil }
+        return gifURL
+    }
+
+    var muscleImageURL: URL? {
+        guard let muscleImage, !muscleImage.isEmpty else { return nil }
+        return URL(string: Self.cdnBase + muscleImage)
+    }
+
+    var isAnimatedPair: Bool { peakImageURL != nil }
+
+    var difficultyZH: String? {
+        switch difficulty?.lowercased() {
+        case "beginner": return "入门"
+        case "intermediate": return "进阶"
+        case "advanced": return "高阶"
+        default: return nil
+        }
+    }
+
+    /// 中文动作名称（优先使用全量中文字段 `nameZH`，再以关键词规则兜底）。
     var chineseAlias: String? {
+        if let nameZH, !nameZH.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return nameZH
+        }
         let lower = name.lowercased()
         let rules: [(String, String)] = [
             ("barbell bench press", "杠铃平板卧推"),
             ("barbell incline bench press", "上斜杠铃卧推"),
-            ("dumbbell bench press", "哑铃卧推"),
+            ("dumbbell bench press", "哑铃平板卧推"),
             ("dumbbell incline bench press", "上斜哑铃卧推"),
             ("barbell full squat", "杠铃深蹲"),
             ("barbell squat", "杠铃深蹲"),
@@ -62,8 +93,8 @@ struct CatalogExercise: Identifiable, Codable, Hashable {
     }
 
     var displayTitle: String {
-        if let alias = chineseAlias {
-            return "\(alias) · \(name)"
+        if let alias = chineseAlias, !alias.isEmpty {
+            return alias
         }
         return name
     }
@@ -79,7 +110,7 @@ struct CatalogExercise: Identifiable, Codable, Hashable {
         case "back", "neck": return .back
         case "shoulders": return .shoulders
         case "upper arms", "lower arms": return .arms
-        case "upper legs", "lower legs": return .legs
+        case "upper legs", "lower legs", "full body": return .legs
         case "waist": return .core
         case "cardio": return .cardio
         default: return .chest
@@ -91,9 +122,10 @@ struct CatalogExercise: Identifiable, Codable, Hashable {
         let equip: Equipment = {
             switch equipment {
             case "barbell", "olympic barbell", "ez barbell", "trap bar": return .barbell
-            case "dumbbell", "kettlebell": return .dumbbell
-            case "cable", "rope": return .cable
-            case "body weight", "assisted", "weighted": return .bodyweight
+            case "dumbbell", "kettlebell", "plates": return .dumbbell
+            case "cable", "rope", "battle rope": return .cable
+            case "body weight", "assisted", "weighted", "pull up bar", "dip station", "rings", "suspension trainer", "flat bench":
+                return .bodyweight
             default: return .machine
             }
         }()
@@ -102,7 +134,7 @@ struct CatalogExercise: Identifiable, Codable, Hashable {
             name: chineseAlias ?? name,
             group: muscleGroup,
             equipment: equip,
-            isTimed: bodyPart == "cardio" || name.lowercased().contains("plank"),
+            isTimed: bodyPart == "cardio" || name.lowercased().contains("plank") || name.lowercased().contains("hold"),
             cue: steps.first ?? "\(targetZH) · \(equipmentZH)"
         )
     }
@@ -111,7 +143,7 @@ struct CatalogExercise: Identifiable, Codable, Hashable {
 
     static let bodyPartOrder: [String] = [
         "chest", "back", "shoulders", "upper arms", "lower arms",
-        "upper legs", "lower legs", "waist", "cardio", "neck"
+        "upper legs", "lower legs", "waist", "full body", "cardio"
     ]
 
     static func bodyPartName(_ raw: String) -> String {
@@ -124,6 +156,7 @@ struct CatalogExercise: Identifiable, Codable, Hashable {
         case "upper legs": return "臀腿"
         case "lower legs": return "小腿"
         case "waist": return "核心腰腹"
+        case "full body": return "全身复合"
         case "cardio": return "心肺有氧"
         case "neck": return "颈部"
         default: return raw
@@ -150,15 +183,34 @@ struct CatalogExercise: Identifiable, Codable, Hashable {
         case "band", "resistance band": return "弹力带"
         case "assisted": return "辅助器械"
         case "weighted": return "负重片"
+        case "plates": return "杠铃片"
+        case "flat bench": return "训练凳"
+        case "pull up bar": return "单杠"
+        case "dip station": return "双杠"
+        case "rings": return "体操吊环"
+        case "suspension trainer": return "TRX 悬挂带"
+        case "ab wheel", "wheel roller", "roller": return "健腹轮"
         case "stability ball": return "瑞士球"
         case "bosu ball": return "波速球"
         case "medicine ball": return "药球"
+        case "slam ball": return "砸球"
+        case "wall ball": return "墙球"
+        case "plyo box": return "跳箱"
+        case "sandbag": return "力量沙袋"
+        case "sled": return "推拉雪橇车"
+        case "battle rope": return "战绳"
+        case "climbing rope": return "爬绳"
+        case "jump rope": return "跳绳"
         case "rope": return "绳索/战绳"
-        case "wheel roller", "roller": return "健腹轮/滚轴"
+        case "wrist roller": return "腕力卷轴"
+        case "treadmill": return "跑步机"
+        case "bicycle": return "自行车"
         case "stationary bike": return "动感单车"
-        case "elliptical machine": return "椭圆机"
-        case "stepmill machine": return "登山机"
-        case "skierg machine": return "滑雪机"
+        case "air bike": return "风阻单车"
+        case "elliptical", "elliptical machine": return "椭圆机"
+        case "stair climber", "stepmill machine": return "登山机"
+        case "rower": return "划船机"
+        case "ski erg", "skierg machine": return "滑雪机"
         case "sled machine": return "雪橇车"
         case "hammer": return "战锤"
         case "tire": return "轮胎"
@@ -169,24 +221,40 @@ struct CatalogExercise: Identifiable, Codable, Hashable {
 
     static func targetName(_ raw: String) -> String {
         switch raw {
-        case "pectorals": return "胸大肌"
-        case "lats": return "背阔肌"
+        case "pectorals", "pectoralis_major": return "胸大肌"
+        case "lats", "latissimus_dorsi": return "背阔肌"
         case "upper back": return "上背肌群"
-        case "traps": return "斜方肌"
-        case "spine": return "竖脊肌"
+        case "rhomboids": return "菱形肌"
+        case "traps", "trapezius": return "斜方肌"
+        case "spine", "erector_spinae": return "竖脊肌"
         case "delts": return "三角肌"
-        case "biceps": return "肱二头肌"
-        case "triceps": return "肱三头肌"
-        case "forearms": return "前臂肌群"
-        case "quads": return "股四头肌"
+        case "anterior_deltoid": return "三角肌前束"
+        case "lateral_deltoid": return "三角肌中束"
+        case "posterior_deltoid": return "三角肌后束"
+        case "infraspinatus_teres_minor": return "冈下肌/肩袖"
+        case "supraspinatus": return "冈上肌"
+        case "biceps", "biceps_brachii": return "肱二头肌"
+        case "brachialis": return "肱肌"
+        case "brachioradialis": return "肱桡肌"
+        case "triceps", "triceps_brachii": return "肱三头肌"
+        case "forearms", "forearm_flexors", "forearm_extensors": return raw == "forearm_extensors" ? "前臂伸肌" : (raw == "forearm_flexors" ? "前臂屈肌" : "前臂肌群")
+        case "quads", "quadriceps": return "股四头肌"
         case "hamstrings": return "腘绳肌"
-        case "glutes": return "臀大肌"
-        case "adductors": return "内收肌"
-        case "abductors": return "外展肌"
-        case "calves": return "小腿肌群"
-        case "abs": return "腹直肌/核心"
-        case "serratus anterior": return "前锯肌"
+        case "glutes", "gluteus_maximus": return "臀大肌"
+        case "gluteus_medius": return "臀中肌"
+        case "adductors": return "大腿内收肌"
+        case "abductors": return "臀外展肌"
+        case "hip_flexors": return "髂腰肌/屈髋肌"
+        case "calves", "gastrocnemius": return "腓肠肌（小腿）"
+        case "soleus": return "比目鱼肌"
+        case "tibialis_anterior": return "胫骨前肌"
+        case "abs", "rectus_abdominis": return "腹直肌"
+        case "obliques": return "腹斜肌"
+        case "transverse_abdominis": return "腹横肌"
+        case "quadratus_lumborum": return "腰方肌"
+        case "serratus anterior", "serratus_anterior": return "前锯肌"
         case "levator scapulae": return "肩胛提肌"
+        case "full_body": return "全身肌群"
         case "cardiovascular system": return "心肺耐力"
         default: return raw
         }
@@ -233,18 +301,30 @@ final class ExerciseCatalogStore {
             if item.equipmentZH.localizedCaseInsensitiveContains(q) { return true }
             if item.targetZH.localizedCaseInsensitiveContains(q) { return true }
             if item.steps.contains(where: { $0.localizedCaseInsensitiveContains(q) }) { return true }
+            if let tips = item.tips, tips.contains(where: { $0.localizedCaseInsensitiveContains(q) }) { return true }
             return false
         }
     }
 }
 
-// MARK: - 动作示范媒体磁盘缓存（查看过即离线可用）
+// MARK: - 动作示范高清媒体磁盘缓存（查看过即离线可用）
 
 enum ExerciseMediaCache {
+    private static let cleanupOnce: Void = {
+        guard let base = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first else { return }
+        let legacyDir = base.appendingPathComponent("ExerciseMedia", isDirectory: true)
+        if FileManager.default.fileExists(atPath: legacyDir.path) {
+            DispatchQueue.global(qos: .utility).async {
+                try? FileManager.default.removeItem(at: legacyDir)
+            }
+        }
+    }()
+
     static var cacheDirectory: URL {
+        _ = cleanupOnce
         let base = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first
             ?? FileManager.default.temporaryDirectory
-        let dir = base.appendingPathComponent("ExerciseMedia", isDirectory: true)
+        let dir = base.appendingPathComponent("ExerciseMediaHD", isDirectory: true)
         if !FileManager.default.fileExists(atPath: dir.path) {
             try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         }
@@ -252,7 +332,13 @@ enum ExerciseMediaCache {
     }
 
     static func cachedFileURL(for remoteURL: URL) -> URL {
-        let safeName = remoteURL.lastPathComponent.isEmpty ? UUID().uuidString : remoteURL.lastPathComponent
+        let comps = remoteURL.pathComponents.filter { $0 != "/" && !$0.isEmpty }
+        let safeName: String
+        if comps.count >= 2 {
+            safeName = comps.suffix(2).joined(separator: "_")
+        } else {
+            safeName = remoteURL.lastPathComponent.isEmpty ? UUID().uuidString : remoteURL.lastPathComponent
+        }
         return cacheDirectory.appendingPathComponent(safeName)
     }
 
@@ -275,6 +361,26 @@ enum ExerciseMediaCache {
         guard !data.isEmpty else { throw URLError(.cannotDecodeRawData) }
         try? data.write(to: localURL, options: .atomic)
         return (data, false)
+    }
+
+    /// 针对列表缩略图使用 ImageIO 进行高速指定最大像素解码，避免 512px 原图在列表中占用过多内存。
+    static func decodeDownsampled(data: Data, maxPixelSize: CGFloat) -> UIImage? {
+        let options: [CFString: Any] = [
+            kCGImageSourceShouldCache: false
+        ]
+        guard let source = CGImageSourceCreateWithData(data as CFData, options as CFDictionary) else {
+            return UIImage(data: data)
+        }
+        let thumbOptions: [CFString: Any] = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceShouldCacheImmediately: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceThumbnailMaxPixelSize: maxPixelSize
+        ]
+        if let cg = CGImageSourceCreateThumbnailAtIndex(source, 0, thumbOptions as CFDictionary) {
+            return UIImage(cgImage: cg)
+        }
+        return UIImage(data: data)
     }
 
     static func totalCachedBytes() -> Int64 {
