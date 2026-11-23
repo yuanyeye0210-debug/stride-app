@@ -65,7 +65,7 @@ final class RunTracker: NSObject, ObservableObject, CLLocationManagerDelegate {
         lastAnnouncedKm = 0
         isDemo = false
         running = true
-        status = "记录中"
+        status = "GPS 记录中"
         manager.startUpdatingLocation()
         RunVoiceCoach.shared.speak("开始记录跑步，祝你状态出色")
 
@@ -81,7 +81,7 @@ final class RunTracker: NSObject, ObservableObject, CLLocationManagerDelegate {
         manager.stopUpdatingLocation()
         timer?.invalidate()
         timer = nil
-        status = "已结束"
+        status = "已暂停"
     }
 
     func reset() {
@@ -99,7 +99,7 @@ final class RunTracker: NSObject, ObservableObject, CLLocationManagerDelegate {
         points = SeedData.loop(center: (31.2304, 121.4737), radius: 0.006, count: 260, seed: 7)
         distanceM = km * 1000
         seconds = Int(km * 330)
-        status = "模拟轨迹"
+        status = "模拟轨迹就绪"
     }
 
     var pace: Int {
@@ -113,7 +113,7 @@ final class RunTracker: NSObject, ObservableObject, CLLocationManagerDelegate {
         switch manager.authorizationStatus {
         case .authorizedWhenInUse, .authorizedAlways:
             authorized = true
-            status = running ? "记录中" : "已授权"
+            status = running ? "GPS 记录中" : "已授权"
         case .denied, .restricted:
             authorized = false
             status = "定位被拒绝：设置 → 隐私 → 定位服务"
@@ -146,7 +146,7 @@ final class RunTracker: NSObject, ObservableObject, CLLocationManagerDelegate {
     }
 }
 
-// MARK: - 记录页
+// MARK: - 记录页（含 3-2-1-GO 全屏弹性倒计时、锁屏防误触、长按蓄力结束保存）
 
 struct RunCaptureView: View {
     @EnvironmentObject private var store: AppStore
@@ -156,6 +156,8 @@ struct RunCaptureView: View {
     @State private var camera: MapCameraPosition = .automatic
     @State private var title = "夜跑"
     @State private var voiceEnabled = true
+    @State private var showCountdown = false
+    @State private var isScreenLocked = false
     @State private var toast: String?
 
     private var coords: [CLLocationCoordinate2D] {
@@ -165,12 +167,30 @@ struct RunCaptureView: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                Palette.bg.ignoresSafeArea()
+                ScreenBackground(accent: Palette.green, secondaryAccent: Palette.lime)
 
                 VStack(spacing: 0) {
                     mapArea
                     statsPanel
                     controls
+                }
+
+                if showCountdown {
+                    CountdownOverlayView(
+                        tint: Palette.lime,
+                        onFinished: {
+                            withAnimation(.snappy(duration: 0.22)) {
+                                showCountdown = false
+                                tracker.start()
+                            }
+                        },
+                        onCancel: {
+                            withAnimation(.snappy(duration: 0.2)) {
+                                showCountdown = false
+                            }
+                        }
+                    )
+                    .transition(.opacity)
                 }
             }
             .navigationTitle("记一次跑")
@@ -207,7 +227,7 @@ struct RunCaptureView: View {
                 }
             }
             .mapStyle(.standard(elevation: .flat))
-            .frame(height: 340)
+            .frame(height: 310)
             .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: 24, style: .continuous)
@@ -216,19 +236,22 @@ struct RunCaptureView: View {
             .padding(.horizontal, Metrics.page)
             .padding(.top, 8)
 
-            HStack(spacing: 6) {
-                Circle()
-                    .fill(tracker.running ? Palette.green : Palette.textFaint)
-                    .frame(width: 6, height: 6)
-                    .scaleEffect(tracker.running ? 1.25 : 1.0)
-                    .animation(tracker.running ? .easeInOut(duration: 0.7).repeatForever(autoreverses: true) : .default, value: tracker.running)
+            HStack(spacing: 7) {
+                ZStack {
+                    RadarPulseRing(color: Palette.green, isActive: tracker.running, size: 16)
+                    Circle()
+                        .fill(tracker.running ? Palette.green : Palette.textFaint)
+                        .frame(width: 7, height: 7)
+                }
+                .frame(width: 16, height: 16)
+
                 Text(tracker.status)
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(Palette.text)
             }
             .padding(.horizontal, 11)
             .padding(.vertical, 6)
-            .background(Capsule().fill(Palette.card.opacity(0.9)))
+            .liquidGlassCapsule(tint: Color.black.opacity(0.62))
             .padding(.leading, Metrics.page + 12)
             .padding(.top, 20)
         }
@@ -240,13 +263,13 @@ struct RunCaptureView: View {
             divider
             stat(paceText, "配速", Palette.text)
             divider
-            stat(timeText, "时长", Palette.text)
+            stat(timeText, "时长", Palette.lime)
         }
         .padding(.vertical, 14)
         .padding(.horizontal, 8)
-        .card(radius: 22, fill: Palette.card, stroke: Palette.stroke)
+        .luxuryCard(radius: 22, accent: Palette.green)
         .padding(.horizontal, Metrics.page)
-        .padding(.top, 14)
+        .padding(.top, 12)
     }
 
     private var divider: some View {
@@ -284,58 +307,92 @@ struct RunCaptureView: View {
                 .font(.system(size: 15, weight: .medium))
                 .foregroundStyle(Palette.text)
                 .padding(.horizontal, 14)
-                .padding(.vertical, 12)
-                .background(RoundedRectangle(cornerRadius: 14).fill(Palette.card))
+                .padding(.vertical, 11)
+                .card(radius: 14, fill: Palette.card, stroke: Palette.stroke)
 
-            HStack(spacing: 10) {
-                Button {
-                    if tracker.running {
-                        tracker.stop()
-                    } else {
-                        tracker.start()
+            if isScreenLocked {
+                SlideToCompleteBar(
+                    title: "面板已锁定 · 滑动解锁操作",
+                    tint: Palette.amber,
+                    icon: "lock.open.fill"
+                ) {
+                    withAnimation(.snappy(duration: 0.22)) {
+                        isScreenLocked = false
                     }
-                } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: tracker.running ? "pause.fill" : "play.fill")
-                            .font(.system(size: 12, weight: .bold))
-                            .symbolEffect(.bounce, value: tracker.running)
-                        Text(tracker.running ? "暂停" : "开始")
-                            .font(.system(size: 15, weight: .bold))
-                    }
-                    .foregroundStyle(Color.black)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 15)
-                    .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(Color.white))
+                    toast = "跑步面板已解锁"
                 }
-                .buttonStyle(StridePressButtonStyle(scale: 0.96, pressedOpacity: 0.9, haptic: .medium))
-
-                Button {
-                    tracker.loadDemo()
-                    toast = "已载入模拟轨迹"
-                } label: {
-                    Image(systemName: "wand.and.stars")
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(Palette.text)
-                        .frame(width: 50, height: 50)
-                        .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(Palette.cardHigh))
-                }
-                .buttonStyle(.stridePress)
-
-                Button {
-                    save()
-                } label: {
-                    Image(systemName: "checkmark")
-                        .font(.system(size: 16, weight: .bold))
+            } else {
+                HStack(spacing: 10) {
+                    Button {
+                        if tracker.running {
+                            tracker.stop()
+                        } else if tracker.seconds == 0 && tracker.points.isEmpty {
+                            withAnimation(.snappy(duration: 0.2)) {
+                                showCountdown = true
+                            }
+                        } else {
+                            tracker.start()
+                        }
+                    } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: tracker.running ? "pause.fill" : "play.fill")
+                                .font(.system(size: 12, weight: .bold))
+                                .symbolEffect(.bounce, value: tracker.running)
+                            Text(tracker.running ? "暂停" : (tracker.seconds > 0 ? "继续" : "开始跑步"))
+                                .font(.system(size: 15, weight: .bold))
+                        }
                         .foregroundStyle(Color.black)
-                        .frame(width: 50, height: 50)
-                        .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(Palette.green))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 15)
+                        .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(Palette.lime))
+                    }
+                    .buttonStyle(.strideShimmer(glow: Palette.lime))
+
+                    Button {
+                        withAnimation(.snappy(duration: 0.2)) {
+                            isScreenLocked = true
+                        }
+                        toast = "已锁定防误触"
+                    } label: {
+                        Image(systemName: "lock.fill")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(Palette.amber)
+                            .frame(width: 48, height: 50)
+                            .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(Palette.cardHigh))
+                    }
+                    .buttonStyle(.strideStepper(accent: Palette.amber))
+                    .accessibilityLabel("锁定面板防误触")
+
+                    Button {
+                        tracker.loadDemo()
+                        toast = "已载入 5.2km 模拟轨迹"
+                    } label: {
+                        Image(systemName: "wand.and.stars")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(Palette.purple)
+                            .frame(width: 48, height: 50)
+                            .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(Palette.cardHigh))
+                    }
+                    .buttonStyle(.strideSpin)
+                    .accessibilityLabel("载入模拟轨迹")
                 }
-                .buttonStyle(StridePressButtonStyle(scale: 0.94, pressedOpacity: 0.9, haptic: .medium))
-                .disabled(tracker.points.isEmpty)
-                .opacity(tracker.points.isEmpty ? 0.4 : 1)
+
+                if !tracker.points.isEmpty {
+                    HoldToConfirmCircleButton(
+                        title: "长按结束并保存本次跑步",
+                        icon: "flag.checkered",
+                        tint: Palette.green,
+                        duration: 0.85
+                    ) {
+                        save()
+                    }
+                    .frame(maxWidth: .infinity)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
             }
-            .animation(.snappy(duration: 0.22), value: tracker.running)
         }
+        .animation(.snappy(duration: 0.22), value: tracker.running)
+        .animation(.snappy(duration: 0.22), value: tracker.points.isEmpty)
         .padding(.horizontal, Metrics.page)
         .padding(.top, 12)
     }

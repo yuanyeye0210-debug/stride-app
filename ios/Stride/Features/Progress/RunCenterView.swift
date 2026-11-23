@@ -13,9 +13,12 @@ struct RunCenterView: View {
     @EnvironmentObject private var store: AppStore
 
     @State private var subTab: RunCenterSubTab = .home
+    @State private var selectedCategory: SportCategory? = nil
+    @State private var searchQuery: String = ""
     @State private var showGPSRun = false
     @State private var activeSportTimer: SportPreset? = nil
     @State private var toast: String?
+    @Namespace private var catFilterNS
 
     var body: some View {
         ZStack(alignment: .top) {
@@ -80,37 +83,89 @@ struct RunCenterView: View {
         .background(Palette.bg.opacity(0.9))
     }
 
-    // MARK: - 45 项全品类运动列表（图 7–15）
+    // MARK: - 45 项全品类运动列表（新增分类磁吸筛选与实时搜索）
 
     private var sportsListView: some View {
         ScrollView(showsIndicators: false) {
-            VStack(alignment: .leading, spacing: 18) {
-                // 核心跑步 5 项（无分类头）
-                VStack(spacing: 10) {
-                    ForEach(SportsCatalog.items(in: .featuredRun)) { sport in
-                        sportLaunchCard(sport)
-                    }
-                }
-
-                // 其余 5 个分组：户外 11、室内有氧 10、球类 13、格斗 3、身心 3
-                ForEach([SportCategory.outdoor, .indoorCardio, .ballSports, .combat, .mindBody]) { category in
-                    let list = SportsCatalog.items(in: category)
-                    VStack(alignment: .leading, spacing: 10) {
-                        HStack(spacing: 7) {
-                            Image(systemName: category.headerIcon)
-                                .font(.system(size: 14, weight: .semibold))
-                                .foregroundStyle(Palette.lime)
-                            Text(category.rawValue)
-                                .font(.system(size: 16, weight: .bold))
-                                .foregroundStyle(Palette.text)
-                            Text("\(list.count)")
-                                .font(.system(size: 13, weight: .medium, design: .rounded))
+            VStack(alignment: .leading, spacing: 16) {
+                // 搜索与分类筛选胶囊栏
+                HStack(spacing: 8) {
+                    Image(systemName: "magnifyingglass")
+                        .font(.system(size: 13.5, weight: .semibold))
+                        .foregroundStyle(Palette.textDim)
+                    TextField("搜索 45 项运动（如 跑步、游泳、羽毛球）", text: $searchQuery)
+                        .textFieldStyle(.plain)
+                        .font(.system(size: 13.5))
+                        .foregroundStyle(Palette.text)
+                    if !searchQuery.isEmpty {
+                        Button {
+                            searchQuery = ""
+                        } label: {
+                            Image(systemName: "xmark.circle.fill")
                                 .foregroundStyle(Palette.textFaint)
                         }
-                        .padding(.top, 4)
+                        .buttonStyle(.stridePress)
+                    }
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 9)
+                .card(radius: 14, fill: Palette.card, stroke: Palette.stroke)
 
-                        ForEach(list) { sport in
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        categoryFilterChip(title: "全部", category: nil)
+                        ForEach(SportCategory.allCases) { cat in
+                            categoryFilterChip(title: cat.rawValue, category: cat)
+                        }
+                    }
+                }
+                .sensoryFeedback(.selection, trigger: selectedCategory)
+
+                let query = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+
+                if selectedCategory == nil && query.isEmpty {
+                    // 核心跑步 5 项（无分类头）
+                    VStack(spacing: 10) {
+                        ForEach(SportsCatalog.items(in: .featuredRun)) { sport in
                             sportLaunchCard(sport)
+                        }
+                    }
+
+                    // 其余 5 个分组：户外 11、室内有氧 10、球类 13、格斗 3、身心 3
+                    ForEach([SportCategory.outdoor, .indoorCardio, .ballSports, .combat, .mindBody]) { category in
+                        let list = SportsCatalog.items(in: category)
+                        VStack(alignment: .leading, spacing: 10) {
+                            HStack(spacing: 7) {
+                                Image(systemName: category.headerIcon)
+                                    .font(.system(size: 14, weight: .semibold))
+                                    .foregroundStyle(Palette.lime)
+                                Text(category.rawValue)
+                                    .font(.system(size: 16, weight: .bold))
+                                    .foregroundStyle(Palette.text)
+                                Text("\(list.count)")
+                                    .font(.system(size: 13, weight: .medium, design: .rounded))
+                                    .foregroundStyle(Palette.textFaint)
+                            }
+                            .padding(.top, 4)
+
+                            ForEach(list) { sport in
+                                sportLaunchCard(sport)
+                            }
+                        }
+                    }
+                } else {
+                    let filtered = SportsCatalog.all.filter { item in
+                        let catMatch = selectedCategory == nil || item.category == selectedCategory
+                        let qMatch = query.isEmpty || item.name.localizedCaseInsensitiveContains(query)
+                        return catMatch && qMatch
+                    }
+                    if filtered.isEmpty {
+                        EmptyHint(icon: "figure.run", title: "没有找到对应运动", message: "试试切换上方分类标签或清空搜索词。")
+                    } else {
+                        VStack(spacing: 10) {
+                            ForEach(filtered) { sport in
+                                sportLaunchCard(sport)
+                            }
                         }
                     }
                 }
@@ -119,6 +174,31 @@ struct RunCenterView: View {
             .padding(.top, 10)
             .padding(.bottom, Metrics.floatingTabBottomInset + 16)
         }
+    }
+
+    private func categoryFilterChip(title: String, category: SportCategory?) -> some View {
+        let active = selectedCategory == category
+        return Button {
+            withAnimation(.spring(response: 0.28, dampingFraction: 0.78)) {
+                selectedCategory = category
+            }
+        } label: {
+            Text(title)
+                .font(.system(size: 12.5, weight: active ? .bold : .medium))
+                .foregroundStyle(active ? Color.black : Palette.textDim)
+                .padding(.horizontal, 13)
+                .padding(.vertical, 7)
+                .background {
+                    if active {
+                        Capsule()
+                            .fill(Palette.lime)
+                            .matchedGeometryEffect(id: "runSportCategoryChip", in: catFilterNS)
+                    } else {
+                        Capsule().fill(Palette.card)
+                    }
+                }
+        }
+        .buttonStyle(.stridePress)
     }
 
     private func sportLaunchCard(_ sport: SportPreset) -> some View {
@@ -153,7 +233,7 @@ struct RunCenterView: View {
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 15)
-            .card(radius: 20, fill: Color(hex: 0x131315), stroke: Palette.stroke)
+            .luxuryCard(radius: 20, accent: Palette.lime, glowCorner: .topTrailing, fill: Color(hex: 0x13151D))
         }
         .buttonStyle(.strideCard(radius: 20))
         .strideScrollDepth(minScale: 0.96, minOpacity: 0.85)
@@ -516,16 +596,21 @@ private struct TerritoryDetailView: View {
 private struct RunTwelveWeekReportView: View {
     @EnvironmentObject private var store: AppStore
 
+    private struct WeekKmPoint: Identifiable {
+        let id: Int
+        let label: String
+        let km: Double
+    }
+
     var body: some View {
         let cal = Calendar.current
-        let weeklyKm: [(label: String, km: Double)] = (0..<12).reversed().map { wOffset in
+        let weeklyKm: [WeekKmPoint] = (0..<12).reversed().enumerated().map { idx, wOffset in
             let weekStart = cal.date(byAdding: .weekOfYear, value: -wOffset, to: cal.dateInterval(of: .weekOfYear, for: Date())?.start ?? Date()) ?? Date()
             let weekEnd = cal.date(byAdding: .day, value: 7, to: weekStart) ?? Date()
             let km = store.state.runs.filter { $0.date >= weekStart && $0.date < weekEnd }.reduce(0.0) { $0 + $1.distanceM / 1000.0 }
             let f = DateFormatter(); f.dateFormat = "M/d"
-            return (f.string(from: weekStart), km)
+            return WeekKmPoint(id: idx, label: f.string(from: weekStart), km: km)
         }
-        let maxKm = max(1.0, weeklyKm.map(\.km).max() ?? 1.0)
 
         return ZStack {
             Palette.bg.ignoresSafeArea()
@@ -535,23 +620,16 @@ private struct RunTwelveWeekReportView: View {
                         .font(.system(size: 18, weight: .bold))
                         .foregroundStyle(Palette.text)
 
-                    HStack(alignment: .bottom, spacing: 6) {
-                        ForEach(weeklyKm.indices, id: \.self) { i in
-                            let item = weeklyKm[i]
-                            VStack(spacing: 4) {
-                                Capsule()
-                                    .fill(item.km > 0 ? Palette.lime : Color.white.opacity(0.1))
-                                    .frame(height: max(8, 120 * (item.km / maxKm)))
-                                Text(i % 3 == 0 ? item.label : "")
-                                    .font(.system(size: 9))
-                                    .foregroundStyle(Palette.textFaint)
-                            }
-                            .frame(maxWidth: .infinity)
-                        }
-                    }
-                    .frame(height: 150)
+                    InteractiveBarChartScrubber(
+                        items: weeklyKm,
+                        valueProvider: \.km,
+                        labelProvider: \.label,
+                        valueTextProvider: { String(format: "%.2f km", $0.km) },
+                        barColor: Palette.lime,
+                        height: 150
+                    )
                     .padding(16)
-                    .card(radius: 22, fill: Palette.card, stroke: Palette.stroke)
+                    .luxuryCard(radius: 22, accent: Palette.lime)
                 }
                 .padding(Metrics.page)
             }

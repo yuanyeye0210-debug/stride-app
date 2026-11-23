@@ -81,8 +81,10 @@ struct MusicDiscoverView: View {
     @State private var showInfoAlert = false
     @State private var showImportSheet = false
     @State private var showLyricsSheet = false
+    @State private var selectedPlaylist: DemoPlaylist?
     @State private var activeTrack: DemoTrack?
     @State private var isPlaying = false
+    @State private var vinylAngle: Double = 0
 
     struct DemoPlaylist: Identifiable {
         let id: String
@@ -238,6 +240,17 @@ struct MusicDiscoverView: View {
             MusicFavoritesSheet(playlists: hotCharts + recommended + workoutPlaylists, tracks: topTracks)
                 .strideSheetDetents([.medium, .large])
         }
+        .sheet(item: $selectedPlaylist) { playlist in
+            PlaylistDetailSheet(
+                playlist: playlist,
+                tracks: topTracks,
+                onPlayTrack: { track in
+                    activeTrack = track
+                    isPlaying = true
+                }
+            )
+            .strideSheetDetents([.medium, .large])
+        }
         .sensoryFeedback(.selection, trigger: activeTrack?.id)
         .sensoryFeedback(.impact(weight: .light), trigger: isPlaying)
         .onChange(of: isPlaying) { _, playing in
@@ -311,7 +324,7 @@ struct MusicDiscoverView: View {
                                             .foregroundStyle(fav ? Color(hex: 0xFA2D48) : Color.white.opacity(0.85))
                                             .symbolEffect(.bounce, value: fav)
                                     }
-                                    .buttonStyle(StridePressButtonStyle(scale: 0.85, pressedOpacity: 0.9, haptic: .light))
+                                    .buttonStyle(.strideHeart(accent: Color(hex: 0xFA2D48)))
                                 }
 
                                 Spacer()
@@ -327,8 +340,7 @@ struct MusicDiscoverView: View {
                             .frame(width: w, height: h)
                         }
                         .onTapGesture {
-                            activeTrack = DemoTrack(id: item.id, rank: 1, title: item.title, artist: item.sourceLabel, bpm: item.bpm, colors: item.colors)
-                            isPlaying = true
+                            selectedPlaylist = item
                         }
                         .scaleEffect(activeTrack?.id == item.id && isPlaying ? 0.98 : 1.0)
                         .animation(.snappy(duration: 0.22), value: activeTrack?.id)
@@ -439,51 +451,71 @@ struct MusicDiscoverView: View {
     }
 
     private func miniPlayerBar(_ track: DemoTrack) -> some View {
-        HStack(spacing: 12) {
-            Circle()
-                .fill(LinearGradient(colors: track.colors, startPoint: .topLeading, endPoint: .bottomTrailing))
-                .frame(width: 34, height: 34)
-                .overlay {
-                    Image(systemName: "waveform")
-                        .font(.system(size: 13, weight: .bold))
-                        .foregroundStyle(.white)
-                }
+        HStack(spacing: 11) {
+            // 旋转黑胶唱片封面
+            ZStack {
+                Circle()
+                    .fill(LinearGradient(colors: track.colors, startPoint: .topLeading, endPoint: .bottomTrailing))
+                    .frame(width: 36, height: 36)
+                Circle()
+                    .strokeBorder(Color.black.opacity(0.35), lineWidth: 4)
+                    .frame(width: 26, height: 26)
+                Circle()
+                    .fill(Palette.bg)
+                    .frame(width: 9, height: 9)
+            }
+            .rotationEffect(.degrees(isPlaying ? 360 : 0))
+            .animation(
+                isPlaying ? .linear(duration: 4.5).repeatForever(autoreverses: false) : .default,
+                value: isPlaying
+            )
 
             VStack(alignment: .leading, spacing: 1) {
                 Text(track.title)
                     .font(.system(size: 13.5, weight: .bold))
                     .foregroundStyle(Palette.text)
                     .lineLimit(1)
-                Text("\(track.bpm) BPM · \(isPlaying ? "播放中（模拟节拍）" : "已暂停")")
+                Text("\(track.bpm) BPM · \(isPlaying ? "实时节拍引擎输出中" : "已暂停")")
                     .font(.system(size: 11))
                     .foregroundStyle(Palette.textDim)
             }
 
             Spacer()
 
-            Button { showLyricsSheet = true } label: {
-                Image(systemName: "waveform")
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(isPlaying ? Color(hex: 0xFA2D48) : Palette.textDim)
-                    .symbolEffect(.variableColor.iterative, isActive: isPlaying)
+            AudioSpectrumBars(
+                isPlaying: isPlaying,
+                bpm: track.bpm,
+                color: Color(hex: 0xFA2D48),
+                barCount: 5,
+                maxHeight: 18
+            )
+            .onTapGesture { showLyricsSheet = true }
+
+            Button {
+                NotificationCenter.default.post(name: .strideMusicNextTrack, object: nil)
+            } label: {
+                Image(systemName: "forward.fill")
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(Palette.textDim)
+                    .frame(width: 30, height: 30)
             }
-            .buttonStyle(.stridePress)
+            .buttonStyle(.strideStepper(accent: Color(hex: 0xFA2D48)))
 
             Button {
                 isPlaying.toggle()
             } label: {
                 Image(systemName: isPlaying ? "pause.fill" : "play.fill")
-                    .font(.system(size: 15, weight: .bold))
+                    .font(.system(size: 14, weight: .bold))
                     .foregroundStyle(Color.white)
                     .frame(width: 34, height: 34)
                     .background(Circle().fill(Color(hex: 0xFA2D48)))
                     .contentTransition(.symbolEffect(.replace))
             }
-            .buttonStyle(.stridePress)
+            .buttonStyle(.strideShimmer(glow: Color(hex: 0xFA2D48)))
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 9)
-        .liquidGlassCapsule(tint: Color.black.opacity(0.65))
+        .liquidGlassCapsule(tint: Color.black.opacity(0.68))
         .contentShape(Capsule())
         .onTapGesture { showLyricsSheet = true }
         .gesture(
@@ -494,6 +526,155 @@ struct MusicDiscoverView: View {
                     }
                 }
         )
+    }
+}
+
+private struct PlaylistDetailSheet: View {
+    @EnvironmentObject private var store: AppStore
+    @Environment(\.dismiss) private var dismiss
+
+    let playlist: MusicDiscoverView.DemoPlaylist
+    let tracks: [MusicDiscoverView.DemoTrack]
+    var onPlayTrack: (MusicDiscoverView.DemoTrack) -> Void
+
+    @State private var customBPM: Double = 140
+
+    var body: some View {
+        let fav = store.isMusicFavorite(playlist.id)
+        NavigationStack {
+            ZStack {
+                Palette.bg.ignoresSafeArea()
+                ScrollView(showsIndicators: false) {
+                    VStack(spacing: 16) {
+                        HStack(spacing: 14) {
+                            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                                .fill(LinearGradient(colors: playlist.colors, startPoint: .topLeading, endPoint: .bottomTrailing))
+                                .frame(width: 96, height: 96)
+                                .overlay {
+                                    Text(playlist.headline)
+                                        .font(.system(size: 16, weight: .black))
+                                        .foregroundStyle(Color.white)
+                                        .multilineTextAlignment(.center)
+                                }
+
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text(playlist.title)
+                                    .font(.system(size: 19, weight: .bold))
+                                    .foregroundStyle(Palette.text)
+                                Text("\(playlist.sourceLabel) · \(playlist.subtitle)")
+                                    .font(.system(size: 12.5))
+                                    .foregroundStyle(Palette.textDim)
+
+                                HStack(spacing: 10) {
+                                    Button {
+                                        onPlayTrack(
+                                            MusicDiscoverView.DemoTrack(
+                                                id: playlist.id,
+                                                rank: 1,
+                                                title: playlist.title,
+                                                artist: playlist.sourceLabel,
+                                                bpm: Int(customBPM),
+                                                colors: playlist.colors
+                                            )
+                                        )
+                                        dismiss()
+                                    } label: {
+                                        HStack(spacing: 5) {
+                                            Image(systemName: "play.fill")
+                                            Text("播放节拍")
+                                        }
+                                        .font(.system(size: 13, weight: .bold))
+                                        .foregroundStyle(Color.white)
+                                        .padding(.horizontal, 16)
+                                        .padding(.vertical, 8)
+                                        .background(Capsule().fill(Color(hex: 0xFA2D48)))
+                                    }
+                                    .buttonStyle(.strideShimmer(glow: Color(hex: 0xFA2D48)))
+
+                                    Button {
+                                        store.toggleMusicFavorite(playlist.id)
+                                    } label: {
+                                        Image(systemName: fav ? "heart.fill" : "heart")
+                                            .font(.system(size: 15, weight: .bold))
+                                            .foregroundStyle(fav ? Color(hex: 0xFA2D48) : Palette.text)
+                                            .frame(width: 34, height: 34)
+                                            .background(Circle().fill(Palette.cardHigh))
+                                    }
+                                    .buttonStyle(.strideHeart(accent: Color(hex: 0xFA2D48)))
+                                }
+                            }
+                            Spacer()
+                        }
+                        .padding(16)
+                        .luxuryCard(radius: 22, accent: playlist.colors.first ?? Palette.pink)
+
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack {
+                                Text("步频/训练节拍调速")
+                                    .font(.system(size: 13.5, weight: .semibold))
+                                    .foregroundStyle(Palette.text)
+                                Spacer()
+                                Text("\(Int(customBPM)) BPM")
+                                    .font(.system(size: 14, weight: .bold, design: .rounded))
+                                    .foregroundStyle(Palette.lime)
+                                    .numericRoll(value: Int(customBPM))
+                            }
+                            Slider(value: $customBPM, in: 80...205, step: 2)
+                                .tint(Color(hex: 0xFA2D48))
+                        }
+                        .padding(14)
+                        .card(radius: 18, fill: Palette.card, stroke: Palette.stroke)
+
+                        VStack(alignment: .leading, spacing: 10) {
+                            Text("收录节拍曲目")
+                                .font(.system(size: 15, weight: .bold))
+                                .foregroundStyle(Palette.text)
+
+                            ForEach(tracks) { track in
+                                Button {
+                                    onPlayTrack(track)
+                                    dismiss()
+                                } label: {
+                                    HStack(spacing: 12) {
+                                        Text("\(track.rank)")
+                                            .font(.system(size: 13, weight: .bold, design: .rounded))
+                                            .foregroundStyle(Palette.textFaint)
+                                            .frame(width: 18)
+                                        VStack(alignment: .leading, spacing: 2) {
+                                            Text(track.title)
+                                                .font(.system(size: 14.5, weight: .semibold))
+                                                .foregroundStyle(Palette.text)
+                                            Text("\(track.artist) · \(track.bpm) BPM")
+                                                .font(.system(size: 12))
+                                                .foregroundStyle(Palette.textDim)
+                                        }
+                                        Spacer()
+                                        Image(systemName: "play.circle.fill")
+                                            .font(.system(size: 22))
+                                            .foregroundStyle(Color(hex: 0xFA2D48))
+                                    }
+                                    .padding(12)
+                                    .card(radius: 16, fill: Palette.card, stroke: Palette.stroke)
+                                }
+                                .buttonStyle(.strideCard(radius: 16))
+                            }
+                        }
+                    }
+                    .padding(Metrics.page)
+                }
+            }
+            .navigationTitle("歌单详情")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("关闭") { dismiss() }.foregroundStyle(Palette.textDim)
+                }
+            }
+            .onAppear {
+                customBPM = Double(playlist.bpm)
+            }
+        }
+        .preferredColorScheme(.dark)
     }
 }
 

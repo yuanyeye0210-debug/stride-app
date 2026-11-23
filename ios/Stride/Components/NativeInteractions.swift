@@ -161,4 +161,16 @@ extension View {
     func strideAppear(delay: Double = 0) -> some View {
         modifier(StrideAppearModifier(delay: delay))
     }
+
+    /// 图标微弹跳（iOS 17+ 原生 `.symbolEffect(.bounce)`）。
+    func strideSymbolBounce<V: Equatable>(trigger: V) -> some View {
+        self.symbolEffect(.bounce, value: trigger)
+    }
+
+    /// 卡片可按压微缩交互与发光边框便捷包装。
+    func strideCardInteractive(cornerRadius: CGFloat = 22) -> some View {
+        self
+            .contentShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+            .hoverEffect(.highlight)
+    }
 }

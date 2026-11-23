@@ -16,9 +16,11 @@ struct ProgressViewScreen: View {
     @State private var foodStartWithCamera = false
     @State private var showTrainingDetail = false
     @State private var showWeightSheet = false
+    @State private var showSleepSheet = false
     @State private var showAllInsights = false
     @State private var showSessionSheet = false
     @State private var showCaffeineSheet = false
+    @State private var fanDragOffset: CGFloat = 0
     @State private var toast: String?
 
     private var insights: [HealthInsightItem] {
@@ -94,6 +96,12 @@ struct ProgressViewScreen: View {
         .sheet(isPresented: $showWeightSheet) {
             WeightLogSheet()
                 .strideSheetDetents([.medium, .large])
+        }
+        .sheet(isPresented: $showSleepSheet) {
+            SleepLogSheet { msg in
+                toast = msg
+            }
+            .strideSheetDetents([.medium, .large])
         }
         .sheet(isPresented: $showAllInsights) {
             AllInsightsSheet(items: insights)
@@ -178,26 +186,52 @@ struct ProgressViewScreen: View {
                             RoundedRectangle(cornerRadius: 12, style: .continuous)
                                 .strokeBorder(Color.white.opacity(0.85), lineWidth: 1.5)
                         )
-                        .rotationEffect(.degrees(angles[idx]))
-                        .offset(x: xOffsets[idx], y: yOffsets[idx])
+                        .rotationEffect(.degrees(angles[idx] + Double(fanDragOffset) * 0.08))
+                        .offset(x: xOffsets[idx] + fanDragOffset * CGFloat(idx - 2) * 0.15, y: yOffsets[idx])
                         .zIndex(idx == 2 ? 3 : (idx == 1 || idx == 3 ? 2 : 1))
                     }
                 }
             }
             .frame(height: 112)
             .padding(.bottom, 30)
+            .contentShape(Rectangle())
             .onTapGesture { showGallerySheet = true }
-
-            // 前景液态玻璃长胶囊
-            HStack(spacing: 12) {
-                Circle()
-                    .fill(Color.white.opacity(0.9))
-                    .frame(width: 38, height: 38)
-                    .overlay {
-                        Image(systemName: "person.fill")
-                            .font(.system(size: 18))
-                            .foregroundStyle(Color(hex: 0xBDBDC4))
+            .gesture(
+                DragGesture(minimumDistance: 4)
+                    .onChanged { val in
+                        fanDragOffset = max(-45, min(45, val.translation.width))
                     }
+                    .onEnded { _ in
+                        withAnimation(.spring(response: 0.35, dampingFraction: 0.65)) {
+                            fanDragOffset = 0
+                        }
+                    }
+            )
+
+            // 前景液态玻璃长胶囊（同步显示自定义头像）
+            HStack(spacing: 12) {
+                Group {
+                    let _ = store.avatarRevision
+                    if let avatar = store.loadAvatarImage() {
+                        Image(uiImage: avatar)
+                            .resizable()
+                            .scaledToFill()
+                    } else {
+                        LinearGradient(
+                            colors: [Palette.indigo, Palette.purple, Palette.cyan],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                        .overlay {
+                            Image(systemName: "person.fill")
+                                .font(.system(size: 17, weight: .bold))
+                                .foregroundStyle(Color.white)
+                        }
+                    }
+                }
+                .frame(width: 38, height: 38)
+                .clipShape(Circle())
+                .overlay(Circle().strokeBorder(Color.white.opacity(0.32), lineWidth: 1))
 
                 VStack(alignment: .leading, spacing: 1) {
                     Text("图片库")
@@ -285,7 +319,7 @@ struct ProgressViewScreen: View {
                             .frame(width: 28, height: 28)
                             .background(Circle().fill(Color.white.opacity(0.09)))
                     }
-                    .buttonStyle(.stridePress)
+                    .buttonStyle(.strideWater(accent: Palette.blue))
                 }
 
                 HStack(alignment: .firstTextBaseline, spacing: 3) {
@@ -306,7 +340,8 @@ struct ProgressViewScreen: View {
                     .foregroundStyle(Palette.textFaint)
             }
             .padding(14)
-            .card(radius: 22, fill: Palette.card, stroke: Palette.stroke)
+            .luxuryCard(radius: 22, accent: Palette.blue, glowCorner: .bottomTrailing)
+            .waterRipple(trigger: waterMl)
             .contentShape(Rectangle())
             .onTapGesture { showDietDashboard = true }
 
@@ -377,7 +412,7 @@ struct ProgressViewScreen: View {
         }
     }
 
-    // MARK: - 今日状态卡片（三排睡眠分期点阵）
+    // MARK: - 今日状态卡片（三排睡眠分期点阵 · 点击可记录/调整睡眠）
 
     private var todayStateCard: some View {
         let lastSleep = store.todaySnapshot.sleepMinutes > 0 ? store.todaySnapshot.sleepMinutes : 445
@@ -385,29 +420,40 @@ struct ProgressViewScreen: View {
         let sleepMins = lastSleep % 60
         let statusText = lastSleep >= 420 ? "状态不错" : "睡眠略短"
 
-        return HStack(spacing: 14) {
-            VStack(alignment: .leading, spacing: 6) {
-                Text("今日状态")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(Palette.textDim)
-                Text(statusText)
-                    .font(.system(size: 22, weight: .bold))
-                    .foregroundStyle(Palette.text)
-                Text(String(format: "昨晚睡了 %dh%02d", sleepHours, sleepMins))
-                    .font(.system(size: 12))
-                    .foregroundStyle(Palette.textFaint)
-            }
+        return Button {
+            showSleepSheet = true
+        } label: {
+            HStack(spacing: 14) {
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack(spacing: 5) {
+                        Text("今日状态")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(Palette.textDim)
+                        Image(systemName: "pencil.line")
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundStyle(Palette.indigo)
+                    }
+                    Text(statusText)
+                        .font(.system(size: 22, weight: .bold))
+                        .foregroundStyle(Palette.text)
+                    Text(String(format: "昨晚睡了 %dh%02d · 点此调整", sleepHours, sleepMins))
+                        .font(.system(size: 12))
+                        .foregroundStyle(Palette.textFaint)
+                        .numericRoll(value: lastSleep)
+                }
 
-            Spacer()
+                Spacer()
 
-            VStack(alignment: .leading, spacing: 8) {
-                sleepStageDotsRow(count: 8, color: Palette.indigo)
-                sleepStageDotsRow(count: 10, color: Palette.blue)
-                sleepStageDotsRow(count: 4, color: Palette.cyan)
+                VStack(alignment: .leading, spacing: 8) {
+                    sleepStageDotsRow(count: max(3, min(10, sleepHours + 1)), color: Palette.indigo)
+                    sleepStageDotsRow(count: max(4, min(11, sleepHours + 3)), color: Palette.blue)
+                    sleepStageDotsRow(count: max(2, min(6, sleepHours - 2)), color: Palette.cyan)
+                }
             }
+            .padding(18)
+            .luxuryCard(radius: 24, accent: Palette.indigo, glowCorner: .topTrailing)
         }
-        .padding(18)
-        .card(radius: 24, fill: Palette.card, stroke: Palette.stroke)
+        .buttonStyle(.strideCard)
     }
 
     private func sleepStageDotsRow(count: Int, color: Color) -> some View {
@@ -517,7 +563,7 @@ struct ProgressViewScreen: View {
         .buttonStyle(.strideCard)
     }
 
-    // MARK: - 睡眠月相卡
+    // MARK: - 睡眠月相卡（点击打开睡眠记录器）
 
     private var sleepMoonCard: some View {
         let sorted = store.state.snapshots.sorted { $0.date < $1.date }
@@ -529,29 +575,35 @@ struct ProgressViewScreen: View {
             }
             return 420
         }
-        let latest = last7.last ?? 420
+        let latest = store.todaySnapshot.sleepMinutes > 0 ? store.todaySnapshot.sleepMinutes : (last7.last ?? 420)
         let avg = last7.reduce(0, +) / max(1, last7.count)
         let pct = Int((Double(latest) / 480.0 * 100.0).rounded())
 
-        return VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Text("睡眠")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(Palette.text)
-                Spacer()
-                Text("目标的 \(pct)%")
-                    .font(.system(size: 12, weight: .semibold, design: .rounded))
-                    .foregroundStyle(Palette.yellow)
+        return Button {
+            showSleepSheet = true
+        } label: {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack {
+                    Label("睡眠", systemImage: "moon.stars.fill")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(Palette.text)
+                    Spacer()
+                    Text("目标的 \(pct)% · 记录")
+                        .font(.system(size: 12, weight: .semibold, design: .rounded))
+                        .foregroundStyle(Palette.yellow)
+                        .numericRoll(value: pct)
+                }
+
+                SleepMoonPhaseRowView(minutes: last7, goalMin: 480)
+
+                Text(String(format: "昨晚 %d:%02d · 平均 %d:%02d（点击调整昨晚睡眠）", latest / 60, latest % 60, avg / 60, avg % 60))
+                    .font(.system(size: 12))
+                    .foregroundStyle(Palette.textDim)
             }
-
-            SleepMoonPhaseRowView(minutes: last7, goalMin: 480)
-
-            Text(String(format: "昨晚 %d:%02d · 平均 %d:%02d", latest / 60, latest % 60, avg / 60, avg % 60))
-                .font(.system(size: 12))
-                .foregroundStyle(Palette.textDim)
+            .padding(18)
+            .luxuryCard(radius: 24, accent: Palette.yellow, glowCorner: .topTrailing)
         }
-        .padding(18)
-        .card(radius: 24, fill: Palette.card, stroke: Palette.stroke)
+        .buttonStyle(.strideCard)
     }
 
     // MARK: - 「亮点」周环比健康洞察流（图 72–77）
@@ -966,30 +1018,71 @@ private struct PhotoCompareSheet: View {
 private struct WeightLogSheet: View {
     @EnvironmentObject private var store: AppStore
     @Environment(\.dismiss) private var dismiss
-    @State private var kgText = ""
+    @State private var weightVal: Double = 75.0
+    @State private var kgText = "75.0"
 
     var body: some View {
         NavigationStack {
             ZStack {
                 Palette.bg.ignoresSafeArea()
-                VStack(spacing: 16) {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("今日体重 (kg)")
-                            .font(.system(size: 14, weight: .semibold))
+                VStack(spacing: 18) {
+                    VStack(spacing: 12) {
+                        Text("左右滑动物理刻度尺，或直接输入")
+                            .font(.system(size: 12.5, weight: .medium))
                             .foregroundStyle(Palette.textDim)
+
+                        TactileRulerSlider(
+                            value: $weightVal,
+                            range: 35...180,
+                            step: 0.1,
+                            unit: "kg",
+                            accent: Palette.green
+                        )
+                        .onChange(of: weightVal) { _, newVal in
+                            kgText = String(format: "%.1f", newVal)
+                        }
+
+                        HStack(spacing: 10) {
+                            ForEach([-0.5, -0.1, 0.1, 0.5], id: \.self) { delta in
+                                Button(String(format: "%+.1f kg", delta)) {
+                                    weightVal = TactileRulerMath.clampAndSnap(weightVal + delta, range: 35...180, step: 0.1)
+                                }
+                                .buttonStyle(.strideStepper(accent: Palette.green))
+                                .font(.system(size: 12.5, weight: .bold, design: .rounded))
+                                .foregroundStyle(Palette.greenText)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 8)
+                                .background(Capsule().fill(Palette.greenDeep.opacity(0.65)))
+                            }
+                        }
+                    }
+                    .padding(16)
+                    .luxuryCard(radius: 22, accent: Palette.green)
+
+                    HStack {
+                        Text("精确键盘输入 (kg)")
+                            .font(.system(size: 13.5, weight: .medium))
+                            .foregroundStyle(Palette.textDim)
+                        Spacer()
                         TextField("75.0", text: $kgText)
                             .keyboardType(.decimalPad)
-                            .font(.system(size: 32, weight: .bold, design: .rounded))
+                            .multilineTextAlignment(.trailing)
+                            .font(.system(size: 17, weight: .bold, design: .rounded))
                             .foregroundStyle(Palette.text)
-                            .padding(14)
-                            .card(radius: 18, fill: Palette.card, stroke: Palette.stroke)
+                            .frame(width: 90)
+                            .onChange(of: kgText) { _, txt in
+                                if let v = Double(txt), v >= 35, v <= 180 {
+                                    weightVal = v
+                                }
+                            }
                     }
+                    .padding(14)
+                    .card(radius: 16, fill: Palette.card, stroke: Palette.stroke)
 
-                    PrimaryButton(title: "保存体重", enabled: Double(kgText) != nil, tint: Palette.green) {
-                        if let val = Double(kgText) {
-                            store.recordWeight(val)
-                            dismiss()
-                        }
+                    PrimaryButton(title: "保存今日体重", enabled: Double(kgText) != nil, tint: Palette.green) {
+                        let finalKg = Double(kgText) ?? weightVal
+                        store.recordWeight(finalKg)
+                        dismiss()
                     }
                     Spacer()
                 }
@@ -1004,7 +1097,113 @@ private struct WeightLogSheet: View {
             }
         }
         .onAppear {
-            kgText = String(format: "%.1f", store.state.profile.weightKg)
+            weightVal = store.state.profile.weightKg
+            kgText = String(format: "%.1f", weightVal)
+        }
+        .preferredColorScheme(.dark)
+    }
+}
+
+private struct SleepLogSheet: View {
+    @EnvironmentObject private var store: AppStore
+    @Environment(\.dismiss) private var dismiss
+    var onSaved: (String) -> Void
+
+    @State private var sleepHours: Double = 7.5
+    @State private var qualityTag: String = "深睡充足"
+
+    private let qualities = ["深睡充足", "神清气爽", "多梦易醒", "入睡较晚"]
+
+    private var totalMinutes: Int {
+        Int((sleepHours * 60.0).rounded())
+    }
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                Palette.bg.ignoresSafeArea()
+                VStack(spacing: 18) {
+                    VStack(spacing: 12) {
+                        Image(systemName: "moon.stars.fill")
+                            .font(.system(size: 32, weight: .semibold))
+                            .foregroundStyle(Palette.yellow)
+                            .symbolEffect(.pulse, value: Int(sleepHours * 2))
+
+                        Text(String(format: "%d 小时 %02d 分", totalMinutes / 60, totalMinutes % 60))
+                            .font(.system(size: 36, weight: .heavy, design: .rounded))
+                            .foregroundStyle(Palette.text)
+                            .numericRoll(value: totalMinutes)
+
+                        Text("达成 8 小时睡眠目标的 \(Int((Double(totalMinutes) / 480.0 * 100.0).rounded()))%")
+                            .font(.system(size: 12.5, weight: .semibold))
+                            .foregroundStyle(totalMinutes >= 420 ? Palette.green : Palette.amber)
+
+                        Slider(value: $sleepHours, in: 3.0...12.0, step: 0.25)
+                            .tint(Palette.indigo)
+                            .padding(.top, 4)
+
+                        HStack(spacing: 8) {
+                            ForEach([6.0, 7.0, 7.5, 8.0, 9.0], id: \.self) { h in
+                                Button(String(format: "%.1fh", h)) {
+                                    sleepHours = h
+                                }
+                                .buttonStyle(.strideStepper(accent: Palette.indigo))
+                                .font(.system(size: 12, weight: .bold, design: .rounded))
+                                .foregroundStyle(abs(sleepHours - h) < 0.05 ? Color.black : Palette.text)
+                                .padding(.horizontal, 11)
+                                .padding(.vertical, 6)
+                                .background(Capsule().fill(abs(sleepHours - h) < 0.05 ? Palette.yellow : Palette.cardHigh))
+                            }
+                        }
+                    }
+                    .padding(18)
+                    .luxuryCard(radius: 22, accent: Palette.indigo)
+
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("主观睡眠感受")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(Palette.textDim)
+                        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
+                            ForEach(qualities, id: \.self) { item in
+                                let on = qualityTag == item
+                                Button {
+                                    qualityTag = item
+                                } label: {
+                                    Text(item)
+                                        .font(.system(size: 13.5, weight: .semibold))
+                                        .foregroundStyle(on ? Color.black : Palette.text)
+                                        .frame(maxWidth: .infinity)
+                                        .padding(.vertical, 10)
+                                        .background(RoundedRectangle(cornerRadius: 12).fill(on ? Palette.indigo : Palette.cardHigh))
+                                }
+                                .buttonStyle(.stridePress)
+                            }
+                        }
+                    }
+                    .padding(15)
+                    .card(radius: 18, fill: Palette.card, stroke: Palette.stroke)
+
+                    PrimaryButton(title: "保存昨晚睡眠", tint: Palette.indigo) {
+                        store.recordSleep(minutes: totalMinutes)
+                        onSaved(String(format: "已记录睡眠 %dh%02dm · %@", totalMinutes / 60, totalMinutes % 60, qualityTag))
+                        dismiss()
+                    }
+                    Spacer()
+                }
+                .padding(Metrics.page)
+                .sensoryFeedback(.selection, trigger: totalMinutes)
+            }
+            .navigationTitle("记录昨晚睡眠")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("取消") { dismiss() }.foregroundStyle(Palette.textDim)
+                }
+            }
+            .onAppear {
+                let cur = store.todaySnapshot.sleepMinutes
+                sleepHours = cur > 0 ? Double(cur) / 60.0 : 7.5
+            }
         }
         .preferredColorScheme(.dark)
     }

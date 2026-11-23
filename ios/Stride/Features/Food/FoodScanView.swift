@@ -208,24 +208,7 @@ struct FoodScanView: View {
                         .frame(height: 220)
                         .frame(maxWidth: .infinity)
                         .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-                        .overlay {
-                            if busy {
-                                GeometryReader { geo in
-                                    Rectangle()
-                                        .fill(
-                                            LinearGradient(
-                                                colors: [.clear, Palette.green.opacity(0.65), .clear],
-                                                startPoint: .top,
-                                                endPoint: .bottom
-                                            )
-                                        )
-                                        .frame(height: 28)
-                                        .offset(y: scanLinePhase ? geo.size.height - 28 : 0)
-                                        .animation(.easeInOut(duration: 1.1).repeatForever(autoreverses: true), value: scanLinePhase)
-                                }
-                                .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-                            }
-                        }
+                        .strideScanBeam(active: busy, color: Palette.green)
 
                     HStack(spacing: 6) {
                         if busy {

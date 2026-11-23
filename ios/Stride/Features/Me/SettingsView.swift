@@ -88,7 +88,7 @@ struct SettingsView: View {
         .preferredColorScheme(store.preferredColorSchemeOverride ?? .dark)
     }
 
-    // MARK: - 顶部纯白 Apple Health 卡片（图 81）
+    // MARK: - 顶部暗夜绯红玻璃 Apple Health 心跳卡片（告别刺眼白块）
 
     private var appleHealthHeroCard: some View {
         Button {
@@ -97,41 +97,44 @@ struct SettingsView: View {
             VStack(spacing: 14) {
                 ZStack {
                     RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .fill(Color.white)
+                        .fill(Palette.ringMove.opacity(0.18))
                         .frame(width: 58, height: 58)
-                        .shadow(color: .black.opacity(0.10), radius: 8, y: 3)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                .strokeBorder(Palette.ringMove.opacity(0.45), lineWidth: 1)
+                        )
                     Image(systemName: "heart.fill")
                         .font(.system(size: 28))
                         .foregroundStyle(
-                            LinearGradient(colors: [Color(hex: 0xFF5A87), Color(hex: 0xFF2D55)], startPoint: .top, endPoint: .bottom)
+                            LinearGradient(colors: [Color(hex: 0xFF6B95), Palette.ringMove], startPoint: .top, endPoint: .bottom)
                         )
-                        .symbolEffect(.bounce, value: health.authorized)
+                        .symbolEffect(.pulse, isActive: true)
                 }
                 .padding(.top, 10)
 
                 HStack(alignment: .bottom) {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("简化健身追踪")
+                        Text("简化健身与生理追踪")
                             .font(.system(size: 12, weight: .medium))
-                            .foregroundStyle(Color(hex: 0x7A7A82))
-                        Text("与 Apple Health 同步")
+                            .foregroundStyle(Palette.textDim)
+                        Text("与 Apple Health 实时同步")
                             .font(.system(size: 18, weight: .bold))
-                            .foregroundStyle(Color(hex: 0x111113))
+                            .foregroundStyle(Palette.text)
                     }
                     Spacer()
                     if syncingHealth {
-                        ProgressView().tint(.black)
+                        ProgressView().tint(Palette.ringMove)
                     } else {
-                        Image(systemName: health.authorized ? "checkmark" : "arrow.triangle.2.circlepath")
-                            .font(.system(size: 15, weight: .bold))
-                            .foregroundStyle(Color(hex: 0x111113))
+                        Image(systemName: health.authorized ? "checkmark.circle.fill" : "arrow.triangle.2.circlepath")
+                            .font(.system(size: 16, weight: .bold))
+                            .foregroundStyle(health.authorized ? Palette.green : Palette.ringMove)
                     }
                 }
             }
             .padding(18)
-            .background(RoundedRectangle(cornerRadius: 24, style: .continuous).fill(Color.white))
+            .luxuryCard(radius: 24, accent: Palette.ringMove, glowCorner: .topTrailing, fill: Palette.crimsonDark)
         }
-        .buttonStyle(.strideCard(radius: 24))
+        .buttonStyle(.strideHeart(accent: Palette.ringMove))
     }
 
     // MARK: - 外设与视觉识别
@@ -195,9 +198,17 @@ struct SettingsView: View {
             rowDivider
 
             Menu {
-                Button("关闭") { store.state.hapticModeRaw = "off" }
-                Button("仅必要") { store.state.hapticModeRaw = "necessary" }
-                Button("全部反馈") { store.state.hapticModeRaw = "all" }
+                Button("关闭") { store.state.hapticModeRaw = "off"; toast = "已关闭触感震动" }
+                Button("仅必要") {
+                    store.state.hapticModeRaw = "necessary"
+                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                    toast = "已切换为：仅必要震动"
+                }
+                Button("全部反馈") {
+                    store.state.hapticModeRaw = "all"
+                    UINotificationFeedbackGenerator().notificationOccurred(.success)
+                    toast = "已开启全量触感反馈"
+                }
             } label: {
                 SettingRow(icon: "iphone.radiowaves.left.and.right", title: "震动（触感反馈）", value: hapticLabel, tint: Palette.blue)
             }
@@ -370,20 +381,18 @@ private struct StorageDataSheet: View {
 
                     Spacer()
 
-                    Button {
+                    HoldToConfirmCircleButton(
+                        title: "长按清理图片库缓存照片",
+                        icon: "trash.fill",
+                        tint: Palette.red,
+                        duration: 0.9
+                    ) {
                         let freed = store.clearPhotoCache()
                         withAnimation(.snappy(duration: 0.22)) {
                             clearedMsg = "已清理照片缓存（释放 \(formatBytes(freed))），训练与饮食文字记录不受影响。"
                         }
-                    } label: {
-                        Text("清理图片库缓存照片")
-                            .font(.system(size: 15, weight: .bold))
-                            .foregroundStyle(Palette.red)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 15)
-                            .card(radius: 18, fill: Palette.card, stroke: Palette.red.opacity(0.35))
                     }
-                    .buttonStyle(StridePressButtonStyle(scale: 0.97, pressedOpacity: 0.9, haptic: .heavy))
+                    .frame(maxWidth: .infinity)
                 }
                 .animation(.snappy(duration: 0.22), value: clearedMsg)
                 .padding(Metrics.page)

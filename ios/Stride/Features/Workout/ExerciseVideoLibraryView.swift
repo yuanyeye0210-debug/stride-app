@@ -471,7 +471,7 @@ struct ExerciseVideoDetailSheet: View {
                             .padding(.vertical, 16)
                             .background(RoundedRectangle(cornerRadius: 20, style: .continuous).fill(Palette.green))
                         }
-                        .buttonStyle(.stridePress)
+                        .buttonStyle(.strideShimmer(glow: Palette.green))
 
                         Text("720p 真人视频来源 CC0 公共领域 · 肌群解剖图由 RepDB (repdb.co) 提供")
                             .font(.system(size: 11))

@@ -11,6 +11,7 @@ struct HeadphoneCompanionView: View {
 
     @State private var toast: String?
     @State private var showSimulatorDebug = false
+    @Namespace private var headphoneModelNS
 
     private let timeoutPresets: [(label: String, sec: TimeInterval)] = [
         ("15秒(测试)", 15),
@@ -129,13 +130,13 @@ struct HeadphoneCompanionView: View {
                     .strokeBorder(Palette.stroke, lineWidth: 0.8)
             )
 
-            // 6 款耳机型号横向切换条
+            // 6 款耳机型号横向磁吸切换条
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
                     ForEach(HeadphoneModelKind.allCases) { kind in
                         let selected = headphone.activeModel == kind
                         Button {
-                            withAnimation(.snappy(duration: 0.25)) {
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.78)) {
                                 headphone.selectDisplayModel(kind)
                             }
                         } label: {
@@ -144,14 +145,21 @@ struct HeadphoneCompanionView: View {
                                 .foregroundStyle(selected ? Color.black : Palette.textDim)
                                 .padding(.horizontal, 12)
                                 .padding(.vertical, 7)
-                                .background(
-                                    Capsule().fill(selected ? Color.white : Palette.cardHigh)
-                                )
+                                .background {
+                                    if selected {
+                                        Capsule()
+                                            .fill(Color.white)
+                                            .matchedGeometryEffect(id: "headphoneModelPill", in: headphoneModelNS)
+                                    } else {
+                                        Capsule().fill(Palette.cardHigh)
+                                    }
+                                }
                         }
                         .buttonStyle(.stridePress)
                     }
                 }
             }
+            .sensoryFeedback(.selection, trigger: headphone.activeModel)
 
             if headphone.activeModel == .airPodsMax {
                 HStack(spacing: 10) {
@@ -246,35 +254,26 @@ struct HeadphoneCompanionView: View {
                 )
             }
 
-            // 近 7 天陪伴柱状图
-            let maxSec = max(60.0, headphone.recent7Days.map(\.seconds).max() ?? 60.0)
+            // 近 7 天陪伴柱状图（支持长按滑动拾取每日时长）
             VStack(alignment: .leading, spacing: 6) {
                 Text("近 7 天陪伴趋势")
                     .font(.system(size: 11.5, weight: .semibold))
                     .foregroundStyle(Palette.textDim)
 
-                HStack(alignment: .bottom, spacing: 8) {
-                    ForEach(headphone.recent7Days) { day in
-                        let ratio = max(0.08, day.seconds / maxSec)
-                        VStack(spacing: 4) {
-                            Spacer(minLength: 0)
-                            RoundedRectangle(cornerRadius: 5, style: .continuous)
-                                .fill(day.label == "今天" ? Palette.green : Palette.blue.opacity(0.65))
-                                .frame(height: 52 * ratio)
-                            Text(day.label)
-                                .font(.system(size: 9.5))
-                                .foregroundStyle(day.label == "今天" ? Palette.text : Palette.textFaint)
-                        }
-                        .frame(maxWidth: .infinity)
-                    }
-                }
-                .frame(height: 74)
+                InteractiveBarChartScrubber(
+                    items: headphone.recent7Days,
+                    valueProvider: \.seconds,
+                    labelProvider: \.label,
+                    valueTextProvider: { HeadphoneCompanionStore.formatDuration($0.seconds) },
+                    barColor: Palette.blue,
+                    height: 92
+                )
             }
             .padding(12)
             .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Palette.cardSoft))
         }
         .padding(15)
-        .card(radius: 22, fill: Palette.card, stroke: Palette.stroke)
+        .luxuryCard(radius: 22, accent: Palette.blue)
     }
 
     private func statBox(title: String, value: String, rollKey: Int, tint: Color) -> some View {
@@ -405,7 +404,7 @@ struct HeadphoneCompanionView: View {
                         .padding(.vertical, 10)
                         .background(RoundedRectangle(cornerRadius: 12).fill(Palette.cardHigh))
                 }
-                .buttonStyle(.stridePress)
+                .buttonStyle(.strideSpin)
 
                 Button {
                     headphone.triggerTestAlert()
@@ -417,7 +416,7 @@ struct HeadphoneCompanionView: View {
                         .padding(.vertical, 10)
                         .background(RoundedRectangle(cornerRadius: 12).fill(Palette.green))
                 }
-                .buttonStyle(.stridePress)
+                .buttonStyle(.strideShimmer(glow: Palette.green))
             }
 
             // 无耳机传感器的调试模拟滑块

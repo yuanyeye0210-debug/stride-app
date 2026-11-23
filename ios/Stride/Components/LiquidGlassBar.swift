@@ -33,6 +33,8 @@ struct HomePulseIcon: View {
                 .padding(.bottom, 3)
         }
         .frame(width: 22, height: 20)
+        .scaleEffect(active ? 1.06 : 0.96)
+        .animation(.spring(response: 0.32, dampingFraction: 0.65), value: active)
     }
 }
 
@@ -80,7 +82,6 @@ struct FloatingTabBar: View {
         HStack(spacing: 4) {
             tabButton(title: "主页", tag: 0) { active in
                 HomePulseIcon(active: active)
-                    .scaleEffect(active ? 1.04 : 0.96)
             }
             tabButton(title: "计划", tag: 1) { active in
                 Image(systemName: active ? "list.clipboard.fill" : "list.clipboard")
@@ -100,7 +101,7 @@ struct FloatingTabBar: View {
         }
         .padding(.horizontal, 6)
         .padding(.vertical, 5)
-        .liquidGlassCapsule(tint: Color.black.opacity(0.45))
+        .liquidGlassCapsule(tint: Color.black.opacity(0.48))
         .padding(.horizontal, 22)
         .padding(.bottom, 6)
         .sensoryFeedback(.selection, trigger: selection)
@@ -123,13 +124,23 @@ struct FloatingTabBar: View {
                 Text(title)
                     .font(.system(size: 10, weight: on ? .semibold : .medium))
             }
-            .foregroundStyle(on ? Color.white : Color.white.opacity(0.65))
+            .foregroundStyle(on ? Color.white : Color.white.opacity(0.62))
             .frame(maxWidth: .infinity)
             .padding(.vertical, 7)
             .background {
                 if on {
                     Capsule(style: .continuous)
-                        .fill(Color.white.opacity(0.16))
+                        .fill(
+                            LinearGradient(
+                                colors: [Color.white.opacity(0.22), Color.white.opacity(0.10)],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                        )
+                        .overlay(
+                            Capsule(style: .continuous)
+                                .strokeBorder(Color.white.opacity(0.24), lineWidth: 0.6)
+                        )
                         .matchedGeometryEffect(id: "floatingTabCapsule", in: tabNS)
                 }
             }
@@ -168,10 +179,16 @@ struct HomeTopSegmentBar: View {
                             .background {
                                 if active {
                                     Capsule(style: .continuous)
-                                        .fill(Color.white.opacity(0.20))
+                                        .fill(
+                                            LinearGradient(
+                                                colors: [Color.white.opacity(0.24), Color.white.opacity(0.12)],
+                                                startPoint: .top,
+                                                endPoint: .bottom
+                                            )
+                                        )
                                         .overlay(
                                             Capsule(style: .continuous)
-                                                .strokeBorder(Color.white.opacity(0.18), lineWidth: 0.6)
+                                                .strokeBorder(Color.white.opacity(0.24), lineWidth: 0.6)
                                         )
                                         .matchedGeometryEffect(id: "homeChannelCapsule", in: channelNS)
                                 }
@@ -182,7 +199,7 @@ struct HomeTopSegmentBar: View {
                 }
             }
             .padding(4)
-            .liquidGlassCapsule(tint: Color.black.opacity(0.42))
+            .liquidGlassCapsule(tint: Color.black.opacity(0.45))
             .sensoryFeedback(.selection, trigger: channel)
 
             contextTrailingButton
@@ -201,24 +218,25 @@ struct HomeTopSegmentBar: View {
                 .id("ai")
         case .music:
             Button(action: onFavoriteMusic) {
-                Image(systemName: "heart")
-                    .font(.system(size: 17, weight: .medium))
-                    .foregroundStyle(Color.white)
+                Image(systemName: "heart.fill")
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundStyle(Palette.pink)
                     .frame(width: 44, height: 44)
-                    .liquidGlassCapsule(tint: Color.black.opacity(0.45))
+                    .liquidGlassCapsule(tint: Color.black.opacity(0.48))
             }
-            .buttonStyle(.stridePress)
+            .buttonStyle(.strideHeart(accent: Palette.pink))
             .id("music")
             .accessibilityLabel("音乐收藏与歌词")
         case .run:
             Button(action: onQuickRun) {
                 Text("GO")
                     .font(.system(size: 14, weight: .heavy, design: .rounded))
-                    .foregroundStyle(Color.white)
+                    .foregroundStyle(Color.black)
                     .frame(width: 44, height: 44)
-                    .liquidGlassCapsule(tint: Color.black.opacity(0.45))
+                    .background(Circle().fill(Palette.lime))
+                    .overlay(Circle().strokeBorder(Color.white.opacity(0.35), lineWidth: 0.9))
             }
-            .buttonStyle(.stridePress)
+            .buttonStyle(.strideShimmer(glow: Palette.lime))
             .id("run")
             .accessibilityLabel("快速开始跑步")
         }
@@ -239,37 +257,35 @@ struct AIGlowCircleButton: View {
                                 Color(hex: 0x6280FF),
                                 Color(hex: 0xFF83C6),
                                 Color(hex: 0xFFBA6A),
-                                Color(hex: 0x65E5AA),
+                                Color(hex: 0x2DD4BF),
                                 Color(hex: 0x6280FF)
                             ],
                             center: .center
                         )
                     )
                     .frame(width: 48, height: 48)
-                    .blur(radius: 5)
-                    .opacity(glowPulse ? 0.85 : 0.58)
-                    .scaleEffect(glowPulse ? 1.06 : 0.94)
+                    .blur(radius: 5.5)
+                    .opacity(glowPulse ? 0.88 : 0.56)
+                    .scaleEffect(glowPulse ? 1.07 : 0.94)
 
-                Circle()
-                    .fill(
-                        LinearGradient(
-                            colors: [Color(hex: 0x5B6CFF), Color(hex: 0x7A49FF)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
+                AuroraBannerBackground(
+                    colorA: Palette.indigo,
+                    colorB: Palette.purple,
+                    colorC: Palette.cyan
+                )
+                .clipShape(Circle())
+                .frame(width: 43, height: 43)
+                .overlay(
+                    Circle()
+                        .strokeBorder(
+                            LinearGradient(
+                                colors: [Color.white.opacity(0.8), Color(hex: 0xFFB86B).opacity(0.75)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            ),
+                            lineWidth: 1.3
                         )
-                    )
-                    .frame(width: 43, height: 43)
-                    .overlay(
-                        Circle()
-                            .strokeBorder(
-                                LinearGradient(
-                                    colors: [Color.white.opacity(0.75), Color(hex: 0xFFB86B).opacity(0.75)],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                ),
-                                lineWidth: 1.4
-                            )
-                    )
+                )
 
                 Text("AI")
                     .font(.system(size: 15, weight: .bold, design: .rounded))
@@ -277,7 +293,7 @@ struct AIGlowCircleButton: View {
             }
             .frame(width: 46, height: 46)
         }
-        .buttonStyle(StridePressButtonStyle(scale: 0.92, pressedOpacity: 0.92, haptic: .medium))
+        .buttonStyle(.strideAurora)
         .onAppear {
             withAnimation(.easeInOut(duration: 2.6).repeatForever(autoreverses: true)) {
                 glowPulse = true

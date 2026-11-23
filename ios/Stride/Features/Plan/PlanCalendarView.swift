@@ -7,6 +7,8 @@ struct PlanCalendarView: View {
     @State private var selectedDate: Date = Date()
     @State private var detailSession: WorkoutSession?
     @State private var showSettings = false
+    @State private var showQuickLogSession = false
+    @Namespace private var daySelectNS
 
     private let cal = Calendar.current
     private let monFirstNames = ["一", "二", "三", "四", "五", "六", "日"]
@@ -20,10 +22,8 @@ struct PlanCalendarView: View {
                     }
 
                     calendarGrid
-
-                    Rectangle()
-                        .fill(Color.white.opacity(0.08))
-                        .frame(height: 0.7)
+                        .padding(14)
+                        .luxuryCard(radius: 24, accent: Palette.coralHi, glowCorner: .topTrailing)
 
                     dayDetailSection
                 }
@@ -36,8 +36,9 @@ struct PlanCalendarView: View {
                 showSettings = true
             } label: {
                 HStack(spacing: 6) {
-                    Image(systemName: "gearshape")
+                    Image(systemName: "gearshape.fill")
                         .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(Palette.coralHi)
                     Text("日历设置")
                         .font(.system(size: 13.5, weight: .semibold))
                 }
@@ -46,7 +47,7 @@ struct PlanCalendarView: View {
                 .padding(.vertical, 10)
                 .liquidGlassCapsule(tint: Color.black.opacity(0.55))
             }
-            .buttonStyle(.stridePress)
+            .buttonStyle(.strideSpin)
             .padding(.bottom, Metrics.floatingTabBottomInset + 8)
         }
         .sheet(item: $detailSession) { session in
@@ -56,6 +57,9 @@ struct PlanCalendarView: View {
         .sheet(isPresented: $showSettings) {
             CalendarSettingsSheet()
                 .strideSheetDetents([.medium])
+        }
+        .sheet(isPresented: $showQuickLogSession) {
+            SessionView(draft: .fromPlan(store.plannedDay(on: selectedDate)))
         }
         .sensoryFeedback(.selection, trigger: selectedDate)
         .sensoryFeedback(.selection, trigger: month)
@@ -125,7 +129,9 @@ struct PlanCalendarView: View {
         }()
 
         return Button {
-            selectedDate = date
+            withAnimation(.spring(response: 0.28, dampingFraction: 0.78)) {
+                selectedDate = date
+            }
         } label: {
             VStack(spacing: 4) {
                 ZStack {
@@ -140,7 +146,7 @@ struct PlanCalendarView: View {
                             .frame(width: 28, height: 28)
                     } else if isSelected {
                         Circle()
-                            .strokeBorder(Color.white.opacity(0.65), lineWidth: 1.5)
+                            .strokeBorder(Color.white.opacity(0.75), lineWidth: 1.5)
                             .frame(width: 30, height: 30)
                     }
 
@@ -157,11 +163,17 @@ struct PlanCalendarView: View {
             }
             .padding(.vertical, 3)
             .frame(maxWidth: .infinity)
-            .background(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(isSelected ? Palette.coralHi.opacity(0.14) : Color.clear)
-            )
-            .animation(.snappy(duration: 0.2), value: selectedDate)
+            .background {
+                if isSelected {
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(Palette.coralHi.opacity(0.16))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .strokeBorder(Palette.coralHi.opacity(0.45), lineWidth: 0.8)
+                        )
+                        .matchedGeometryEffect(id: "calendarDayHighlight", in: daySelectNS)
+                }
+            }
         }
         .buttonStyle(.strideRow(radius: 12))
     }
@@ -180,20 +192,56 @@ struct PlanCalendarView: View {
         return cells
     }
 
-    // MARK: - 日历下方单日详情区
+    // MARK: - 日历下方单日详情区（补全空日快捷记录/开练入口）
 
     private var dayDetailSection: some View {
         let daySessions = store.state.sessions.filter { cal.isDate($0.date, inSameDayAs: selectedDate) }
+        let planned = store.plannedDay(on: selectedDate)
+
         return VStack(alignment: .leading, spacing: 10) {
-            Text(selectedDayHeading)
-                .font(.system(size: 16, weight: .bold))
-                .foregroundStyle(Palette.coralHi)
+            HStack {
+                Text(selectedDayHeading)
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundStyle(Palette.coralHi)
+                Spacer()
+                if let planned, !planned.rest {
+                    Text("排期：\(planned.title)")
+                        .font(.system(size: 11.5, weight: .semibold))
+                        .foregroundStyle(Palette.yellow)
+                        .padding(.horizontal, 9)
+                        .padding(.vertical, 4)
+                        .background(Capsule().fill(Palette.yellow.opacity(0.14)))
+                }
+            }
 
             if daySessions.isEmpty {
-                Text("这天没有训练")
-                    .font(.system(size: 14))
-                    .foregroundStyle(Palette.textFaint)
-                    .padding(.vertical, 12)
+                HStack {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("这天还没有训练记录")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(Palette.text)
+                        Text(planned?.rest == false ? "可按当日排期直接开始或补录" : "点击右侧按钮立即记一次训练")
+                            .font(.system(size: 12))
+                            .foregroundStyle(Palette.textDim)
+                    }
+                    Spacer()
+                    Button {
+                        showQuickLogSession = true
+                    } label: {
+                        HStack(spacing: 5) {
+                            Image(systemName: "plus.circle.fill")
+                            Text("记一次训练")
+                        }
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundStyle(Color.black)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 9)
+                        .background(Capsule().fill(Palette.coralHi))
+                    }
+                    .buttonStyle(.strideShimmer(glow: Palette.coralHi))
+                }
+                .padding(14)
+                .luxuryCard(radius: 18, accent: Palette.coralHi, fill: Palette.cardSoft)
             } else {
                 ForEach(daySessions) { session in
                     Button {
@@ -217,7 +265,7 @@ struct PlanCalendarView: View {
                                 .foregroundStyle(Palette.textFaint)
                         }
                         .padding(14)
-                        .card(radius: 18, fill: Palette.card, stroke: Palette.stroke)
+                        .luxuryCard(radius: 18, accent: session.inferredIntensity.color)
                     }
                     .buttonStyle(.strideCard(radius: 18))
                 }
@@ -255,7 +303,7 @@ private struct CalendarSettingsSheet: View {
                     }
                     .tint(Palette.coralHi)
                     .padding(16)
-                    .card(radius: 18, fill: Palette.card, stroke: Palette.stroke)
+                    .luxuryCard(radius: 18, accent: Palette.coralHi)
 
                     Spacer()
                 }

@@ -24,6 +24,7 @@ struct BarcodeScannerSheet: View {
                         }
                         .frame(height: 280)
                         .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+                        .strideScanBeam(active: true, color: Palette.green)
                         .overlay(
                             RoundedRectangle(cornerRadius: 22, style: .continuous)
                                 .strokeBorder(Palette.green.opacity(0.65), lineWidth: 2)

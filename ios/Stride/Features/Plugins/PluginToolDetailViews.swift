@@ -61,7 +61,7 @@ struct PluginToolHostSheet: View {
     }
 }
 
-// MARK: - 1. 步频节拍器
+// MARK: - 1. 步频节拍器（真发声鼓点 + Tap Tempo 点按测速 + 雷达脉冲）
 
 private struct CadenceMetronomeToolView: View {
     @State private var spm: Double = 176
@@ -69,10 +69,13 @@ private struct CadenceMetronomeToolView: View {
     @State private var beatOn = false
     @State private var count = 0
     @State private var timer: Timer?
+    @State private var tapTimestamps: [TimeInterval] = []
 
     var body: some View {
-        VStack(spacing: 22) {
+        VStack(spacing: 20) {
             ZStack {
+                RadarPulseRing(color: Palette.lime, isActive: running, size: 170)
+
                 Circle()
                     .fill(beatOn ? Palette.lime.opacity(0.28) : Color.white.opacity(0.06))
                     .frame(width: 170, height: 170)
@@ -83,12 +86,13 @@ private struct CadenceMetronomeToolView: View {
                     Text("\(Int(spm))")
                         .font(.system(size: 52, weight: .heavy, design: .rounded))
                         .foregroundStyle(Palette.lime)
+                        .numericRoll(value: Int(spm))
                     Text("步 / 分钟 (SPM)")
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundStyle(Palette.textDim)
                 }
             }
-            .padding(.top, 18)
+            .padding(.top, 14)
 
             Slider(value: $spm, in: 145...205, step: 1) { _ in
                 if running { restartTimer() }
@@ -102,6 +106,7 @@ private struct CadenceMetronomeToolView: View {
                         spm = Double(preset)
                         if running { restartTimer() }
                     }
+                    .buttonStyle(.strideStepper(accent: Palette.lime))
                     .font(.system(size: 13, weight: .bold, design: .rounded))
                     .foregroundStyle(Int(spm) == preset ? Color.black : Palette.text)
                     .padding(.horizontal, 14)
@@ -110,9 +115,33 @@ private struct CadenceMetronomeToolView: View {
                 }
             }
 
+            Button {
+                let now = Date().timeIntervalSinceReferenceDate
+                tapTimestamps.append(now)
+                if tapTimestamps.count > 5 {
+                    tapTimestamps.removeFirst(tapTimestamps.count - 5)
+                }
+                if let measured = TapTempoCalculator.computeBPM(timestamps: tapTimestamps, range: 145...205) {
+                    spm = Double(measured)
+                    if running { restartTimer() }
+                }
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "hand.tap.fill")
+                    Text("连续点按测步频 (Tap Tempo)")
+                }
+                .font(.system(size: 13.5, weight: .bold))
+                .foregroundStyle(Palette.lime)
+                .padding(.horizontal, 18)
+                .padding(.vertical, 10)
+                .background(Capsule().fill(Palette.cardHigh))
+                .overlay(Capsule().strokeBorder(Palette.lime.opacity(0.4), lineWidth: 1))
+            }
+            .buttonStyle(.strideStepper(accent: Palette.lime))
+
             Spacer()
 
-            PrimaryButton(title: running ? "停止打拍" : "开始打拍", tint: Palette.lime) {
+            PrimaryButton(title: running ? "停止节拍器" : "启动声音 + 触觉打拍", tint: Palette.lime) {
                 running.toggle()
                 if running { restartTimer() } else { stopTimer() }
             }
@@ -123,6 +152,8 @@ private struct CadenceMetronomeToolView: View {
 
     private func restartTimer() {
         stopTimer()
+        let bpmInt = Int(spm.rounded())
+        MetronomeAudioEngine.shared.start(bpm: bpmInt)
         let interval = 60.0 / max(100, spm)
         timer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { _ in
             beatOn = true
@@ -138,6 +169,7 @@ private struct CadenceMetronomeToolView: View {
         timer?.invalidate()
         timer = nil
         beatOn = false
+        MetronomeAudioEngine.shared.stop()
     }
 }
 
@@ -174,12 +206,18 @@ private struct IntervalTimerToolView: View {
             .card(radius: 24, fill: Palette.card, stroke: Palette.stroke)
 
             HStack(spacing: 10) {
-                Button("Tabata 20/10") { applyPreset(w: 20, r: 10, n: 8) }
-                Button("EMOM 60s") { applyPreset(w: 60, r: 0, n: 10) }
-                Button("40/20 × 6") { applyPreset(w: 40, r: 20, n: 6) }
+                ForEach([("Tabata 20/10", 20, 10, 8), ("EMOM 60s", 60, 0, 10), ("40/20 × 6", 40, 20, 6)], id: \.0) { item in
+                    Button(item.0) {
+                        applyPreset(w: item.1, r: item.2, n: item.3)
+                    }
+                    .buttonStyle(.strideStepper(accent: Palette.lime))
+                    .font(.system(size: 12.5, weight: .bold))
+                    .foregroundStyle(Palette.text)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(Capsule().fill(Palette.cardHigh))
+                }
             }
-            .font(.system(size: 12.5, weight: .semibold))
-            .foregroundStyle(Palette.text)
 
             VStack(spacing: 10) {
                 Stepper("工作时长：\(workSec) 秒", value: $workSec, in: 10...180, step: 5)
@@ -381,61 +419,104 @@ private struct StretchTimerToolView: View {
 }
 
 private struct SleepAudioToolView: View {
-    @State private var scene = "夏夜雨声"
+    @StateObject private var ambient = AmbientAudioEngine.shared
+    @State private var scene: AmbientScene = .rain
     @State private var minutes = 30
     @State private var secLeft = 1800
     @State private var running = false
     private let ticker = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
     var body: some View {
-        VStack(spacing: 18) {
+        VStack(spacing: 16) {
             LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
-                ForEach(["夏夜雨声", "壁炉篝火", "深海白噪音", "森林晚风"], id: \.self) { item in
+                ForEach(AmbientScene.allCases) { item in
+                    let on = scene == item
                     Button {
                         scene = item
+                        ambient.currentScene = item
+                        if running {
+                            ambient.start(scene: item)
+                        }
                     } label: {
-                        Text(item)
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundStyle(scene == item ? Color.black : Palette.text)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 14)
-                            .background(RoundedRectangle(cornerRadius: 14).fill(scene == item ? Palette.purple : Palette.card))
+                        HStack(spacing: 8) {
+                            Image(systemName: item.icon)
+                                .font(.system(size: 14, weight: .bold))
+                            Text(item.rawValue)
+                                .font(.system(size: 13.5, weight: .semibold))
+                        }
+                        .foregroundStyle(on ? Color.black : Palette.text)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 13)
+                        .background(RoundedRectangle(cornerRadius: 14).fill(on ? Palette.purple : Palette.card))
                     }
-                    .buttonStyle(.stridePress)
+                    .buttonStyle(.strideStepper(accent: Palette.purple))
                 }
             }
             .animation(.snappy(duration: 0.2), value: scene)
             .sensoryFeedback(.selection, trigger: scene)
 
-            VStack(spacing: 6) {
-                Text(scene).font(.system(size: 18, weight: .bold)).foregroundStyle(Palette.text)
+            VStack(spacing: 8) {
+                HStack(spacing: 10) {
+                    Text(scene.rawValue).font(.system(size: 18, weight: .bold)).foregroundStyle(Palette.text)
+                    AudioSpectrumBars(isPlaying: running, bpm: 72, color: Palette.purple, barCount: 5, maxHeight: 16)
+                }
+                Text(scene.subtitle)
+                    .font(.system(size: 11.5))
+                    .foregroundStyle(Palette.textDim)
                 Text(PluginMath.formatDuration(Double(secLeft)))
-                    .font(.system(size: 48, weight: .heavy, design: .rounded))
+                    .font(.system(size: 46, weight: .heavy, design: .rounded))
                     .foregroundStyle(Palette.purple)
                     .monospacedDigit()
                     .numericRoll(value: secLeft, countsDown: true)
-                Text(running ? "定时倒计时中（本机助眠引导）" : "选好时长点开始")
-                    .font(.system(size: 12))
+                Text(running ? "实时合成环境声场播放中" : "选好时长点开始播放真实助眠声场")
+                    .font(.system(size: 11.5))
                     .foregroundStyle(Palette.textDim)
             }
-            .padding(24)
+            .padding(20)
             .frame(maxWidth: .infinity)
-            .card(radius: 22, fill: Palette.card, stroke: Palette.stroke)
+            .luxuryCard(radius: 22, accent: Palette.purple)
 
-            Stepper("定时：\(minutes) 分钟", value: $minutes, in: 10...90, step: 10)
-                .foregroundStyle(Palette.text)
-                .onChange(of: minutes) { _, v in if !running { secLeft = v * 60 } }
+            VStack(spacing: 10) {
+                HStack {
+                    Image(systemName: "speaker.wave.2.fill").foregroundStyle(Palette.purple)
+                    Text("声场音量")
+                        .font(.system(size: 13.5, weight: .medium))
+                        .foregroundStyle(Palette.text)
+                    Slider(value: $ambient.volume, in: 0.05...1.0)
+                        .tint(Palette.purple)
+                }
+                Stepper("定时关闭：\(minutes) 分钟", value: $minutes, in: 10...90, step: 10)
+                    .foregroundStyle(Palette.text)
+                    .onChange(of: minutes) { _, v in if !running { secLeft = v * 60 } }
+            }
+            .padding(14)
+            .card(radius: 18, fill: Palette.card, stroke: Palette.stroke)
 
             Spacer()
-            PrimaryButton(title: running ? "停止" : "开始定时", tint: Palette.purple) {
-                if !running { secLeft = minutes * 60 }
-                running.toggle()
+            PrimaryButton(title: running ? "停止声场" : "播放\(scene.rawValue)并开始定时", tint: Palette.purple) {
+                if !running {
+                    secLeft = minutes * 60
+                    running = true
+                    ambient.start(scene: scene)
+                } else {
+                    running = false
+                    ambient.stop()
+                }
             }
         }
         .padding(Metrics.page)
         .onReceive(ticker) { _ in
             guard running else { return }
-            if secLeft > 1 { secLeft -= 1 } else { running = false }
+            if secLeft > 1 {
+                secLeft -= 1
+            } else {
+                running = false
+                ambient.stop()
+            }
+        }
+        .onDisappear {
+            running = false
+            ambient.stop()
         }
     }
 }
@@ -511,41 +592,94 @@ private struct HRRTestToolView: View {
 }
 
 private struct PodcastToolView: View {
-    @State private var playingID: String?
-    private let episodes = [
-        ("p1", "EP.01 Zone 2 轻松跑为什么能越跑越快？", "18 分钟 · 耐力生理学"),
-        ("p2", "EP.02 每周多少组才算有效肌肥大容量？", "22 分钟 · 力量训练"),
-        ("p3", "EP.03 赛前碳水加载与补给窗口实操", "15 分钟 · 马拉松营养")
-    ]
+    @StateObject private var player = PodcastSpeechPlayer.shared
 
     var body: some View {
         ScrollView {
             VStack(spacing: 12) {
-                ForEach(episodes, id: \.0) { ep in
-                    let on = playingID == ep.0
+                HStack {
+                    Label("运动科学语音精讲", systemImage: "waveform.badge.mic")
+                        .font(.system(size: 13.5, weight: .bold))
+                        .foregroundStyle(Palette.greenText)
+                    Spacer()
                     Button {
-                        playingID = on ? nil : ep.0
+                        player.cycleSpeed()
                     } label: {
-                        HStack {
-                            VStack(alignment: .leading, spacing: 3) {
-                                Text(ep.1).font(.system(size: 14.5, weight: .semibold)).foregroundStyle(Palette.text)
-                                Text(ep.2).font(.system(size: 12)).foregroundStyle(Palette.textDim)
-                            }
-                            Spacer()
-                            Image(systemName: on ? "pause.circle.fill" : "play.circle.fill")
-                                .font(.system(size: 28))
-                                .foregroundStyle(on ? Palette.green : Palette.text)
-                                .symbolEffect(.bounce, value: on)
-                        }
-                        .padding(14)
-                        .card(radius: 18, fill: Palette.card, stroke: Palette.stroke)
+                        Text(String(format: "%.2g× 倍速", player.playbackSpeedMultiplier))
+                            .font(.system(size: 12, weight: .bold, design: .rounded))
+                            .foregroundStyle(Palette.green)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 5)
+                            .background(Capsule().fill(Palette.greenDeep))
                     }
-                    .buttonStyle(.strideCard(radius: 18))
+                    .buttonStyle(.strideStepper(accent: Palette.green))
+                }
+
+                ForEach(PodcastSpeechPlayer.catalog) { ep in
+                    let on = player.playingEpisodeID == ep.id && player.isPlaying
+                    VStack(alignment: .leading, spacing: 10) {
+                        Button {
+                            player.toggle(episode: ep)
+                        } label: {
+                            HStack(spacing: 12) {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    HStack(spacing: 6) {
+                                        Text(ep.code)
+                                            .font(.system(size: 11, weight: .bold, design: .rounded))
+                                            .foregroundStyle(Color.black)
+                                            .padding(.horizontal, 7)
+                                            .padding(.vertical, 2)
+                                            .background(Capsule().fill(on ? Palette.green : Palette.yellow))
+                                        Text(ep.durationLabel)
+                                            .font(.system(size: 11.5))
+                                            .foregroundStyle(Palette.textDim)
+                                    }
+                                    Text(ep.title)
+                                        .font(.system(size: 15, weight: .bold))
+                                        .foregroundStyle(Palette.text)
+                                        .multilineTextAlignment(.leading)
+                                    Text(ep.summary)
+                                        .font(.system(size: 12))
+                                        .foregroundStyle(Palette.textDim)
+                                        .multilineTextAlignment(.leading)
+                                }
+                                Spacer()
+                                VStack(spacing: 6) {
+                                    Image(systemName: on ? "pause.circle.fill" : "play.circle.fill")
+                                        .font(.system(size: 32))
+                                        .foregroundStyle(on ? Palette.green : Palette.text)
+                                        .symbolEffect(.bounce, value: on)
+                                    if on {
+                                        AudioSpectrumBars(isPlaying: true, bpm: 120, color: Palette.green, barCount: 4, maxHeight: 12)
+                                    }
+                                }
+                            }
+                        }
+                        .buttonStyle(.strideCard(radius: 18))
+
+                        if player.playingEpisodeID == ep.id {
+                            BarProgress(progress: player.progress, color: Palette.green, height: 4)
+                            let segIdx = min(max(0, player.currentSegmentIndex), ep.segments.count - 1)
+                            Text("章节 \(segIdx + 1)/\(ep.segments.count)：\(ep.segments[segIdx])")
+                                .font(.system(size: 12.5))
+                                .foregroundStyle(Palette.greenText)
+                                .lineSpacing(3)
+                                .padding(10)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .background(RoundedRectangle(cornerRadius: 12).fill(Palette.cardSoft))
+                        }
+                    }
+                    .padding(14)
+                    .luxuryCard(radius: 18, accent: on ? Palette.green : Palette.blue)
                 }
             }
-            .animation(.snappy(duration: 0.2), value: playingID)
-            .sensoryFeedback(.selection, trigger: playingID)
+            .animation(.snappy(duration: 0.22), value: player.playingEpisodeID)
+            .animation(.snappy(duration: 0.22), value: player.currentSegmentIndex)
+            .sensoryFeedback(.selection, trigger: player.playingEpisodeID)
             .padding(Metrics.page)
+        }
+        .onDisappear {
+            player.stop()
         }
     }
 }
@@ -810,8 +944,17 @@ private struct WatermarkStudioToolView: View {
                     .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
 
                 PhotosPicker(selection: $pickerItem, matching: .images, photoLibrary: .shared()) {
-                    SecondaryButton(title: "选一张底图照片", icon: "photo") {}
-                        .allowsHitTesting(false)
+                    HStack(spacing: 6) {
+                        Image(systemName: "photo.on.rectangle.angled")
+                            .font(.system(size: 14, weight: .semibold))
+                        Text("选一张底图照片")
+                            .font(.system(size: 15, weight: .semibold))
+                    }
+                    .padding(.horizontal, 18)
+                    .padding(.vertical, 11)
+                    .foregroundStyle(Palette.text)
+                    .background(Capsule().fill(Palette.cardHigh))
+                    .overlay(Capsule().strokeBorder(Palette.strokeHi, lineWidth: 1))
                 }
                 .onChange(of: pickerItem) { _, item in
                     Task {

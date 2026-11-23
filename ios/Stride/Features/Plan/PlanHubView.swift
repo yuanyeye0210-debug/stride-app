@@ -137,7 +137,7 @@ struct PlanHubView: View {
                         .frame(width: 42, height: 42)
                         .background(Circle().fill(Palette.yellow))
                 }
-                .buttonStyle(.stridePress)
+                .buttonStyle(.strideShimmer(glow: Palette.yellow))
                 .accessibilityLabel("快速新建训练")
             }
 

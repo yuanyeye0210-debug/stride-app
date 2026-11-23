@@ -17,6 +17,7 @@ struct PlanScheduleView: View {
     @State private var showGuideSheet = false
     @State private var showSearchSheet = false
     @State private var selectedTemplate: WorkoutTemplate? = nil
+    @State private var detailSession: WorkoutSession? = nil
     @State private var toast: String?
 
     private let cal = Calendar.current
@@ -65,12 +66,15 @@ struct PlanScheduleView: View {
                         .padding(.horizontal, 22)
                         .frame(height: 46)
                         .background(Capsule().fill(Palette.yellow))
-                        .shadow(color: .black.opacity(0.45), radius: 14, y: 6)
                 }
-                .buttonStyle(.stridePress)
+                .buttonStyle(.strideShimmer(glow: Palette.yellow))
             }
             .padding(.trailing, Metrics.page)
             .padding(.bottom, Metrics.floatingTabBottomInset + 8)
+        }
+        .sheet(item: $detailSession) { session in
+            SessionDetailView(session: session)
+                .strideSheetDetents([.medium, .large])
         }
         .sheet(isPresented: $showSession, onDismiss: { activeDraft = nil }) {
             SessionView(draft: activeDraft ?? .empty())
@@ -121,15 +125,21 @@ struct PlanScheduleView: View {
         .toast($toast)
     }
 
-    // MARK: - 亮黄色标题周/月排期卡片
+    // MARK: - 黑金碳纤磨砂标题周/月排期卡片
 
     private var scheduleCard: some View {
         VStack(spacing: 0) {
-            // 亮黄色顶栏
+            // 黑金鎏金顶栏（告别刺眼纯亮黄）
             HStack {
-                Text(expandedMonth ? expandedMonthTitle : weekHeaderTitle)
-                    .font(.system(size: 18, weight: .bold))
-                    .foregroundStyle(Color.black)
+                HStack(spacing: 7) {
+                    Circle()
+                        .fill(Palette.yellow)
+                        .frame(width: 7, height: 7)
+                        .shadow(color: Palette.yellow, radius: 4)
+                    Text(expandedMonth ? expandedMonthTitle : weekHeaderTitle)
+                        .font(.system(size: 18, weight: .bold))
+                        .foregroundStyle(Palette.text)
+                }
 
                 Spacer()
 
@@ -146,7 +156,19 @@ struct PlanScheduleView: View {
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
-            .background(Palette.yellow)
+            .background(
+                LinearGradient(
+                    colors: [Color(hex: 0x2F2716), Color(hex: 0x1A1814)],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            )
+            .overlay(
+                Rectangle()
+                    .fill(Palette.yellow.opacity(0.24))
+                    .frame(height: 0.7),
+                alignment: .bottom
+            )
 
             // 网格内容
             VStack(spacing: 12) {
@@ -162,7 +184,14 @@ struct PlanScheduleView: View {
         .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 24, style: .continuous)
-                .strokeBorder(Palette.stroke, lineWidth: 1)
+                .strokeBorder(
+                    LinearGradient(
+                        colors: [Palette.yellow.opacity(0.35), Palette.stroke],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    lineWidth: 1
+                )
         )
     }
 
@@ -170,11 +199,12 @@ struct PlanScheduleView: View {
         Button(action: action) {
             Image(systemName: symbol)
                 .font(.system(size: 12, weight: .bold))
-                .foregroundStyle(Color(hex: 0x3A300A))
+                .foregroundStyle(Palette.yellow)
                 .frame(width: 28, height: 28)
-                .background(Circle().fill(Color.white.opacity(0.45)))
+                .background(Circle().fill(Palette.yellow.opacity(0.14)))
+                .overlay(Circle().strokeBorder(Palette.yellow.opacity(0.28), lineWidth: 0.7))
         }
-        .buttonStyle(.stridePress)
+        .buttonStyle(.strideSpin)
     }
 
     private var moreScheduleMenu: some View {
@@ -237,9 +267,10 @@ struct PlanScheduleView: View {
         } label: {
             Image(systemName: "ellipsis")
                 .font(.system(size: 12, weight: .bold))
-                .foregroundStyle(Color(hex: 0x3A300A))
+                .foregroundStyle(Palette.yellow)
                 .frame(width: 28, height: 28)
-                .background(Circle().fill(Color.white.opacity(0.45)))
+                .background(Circle().fill(Palette.yellow.opacity(0.14)))
+                .overlay(Circle().strokeBorder(Palette.yellow.opacity(0.28), lineWidth: 0.7))
         }
     }
 
@@ -536,7 +567,7 @@ struct PlanScheduleView: View {
         }
     }
 
-    // MARK: - 近期训练历史摘要
+    // MARK: - 近期训练历史摘要（补全点击进入训练详情）
 
     private var recentHistoryCompact: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -546,14 +577,19 @@ struct PlanScheduleView: View {
                 EmptyHint(icon: "dumbbell", title: "还没有训练记录", message: "点右上 + 或下方模板立即开始。")
             } else {
                 ForEach(store.recentSessions.prefix(4)) { session in
-                    SessionRow(session: session)
-                        .contextMenu {
-                            Button(role: .destructive) {
-                                store.deleteSession(id: session.id)
-                            } label: {
-                                Label("删除", systemImage: "trash")
-                            }
+                    Button {
+                        detailSession = session
+                    } label: {
+                        SessionRow(session: session)
+                    }
+                    .buttonStyle(.strideCard(radius: 18))
+                    .contextMenu {
+                        Button(role: .destructive) {
+                            store.deleteSession(id: session.id)
+                        } label: {
+                            Label("删除", systemImage: "trash")
                         }
+                    }
                 }
             }
         }

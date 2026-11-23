@@ -1,4 +1,5 @@
 import SwiftUI
+import PhotosUI
 import UniformTypeIdentifiers
 
 /// 备份导出用的文件文档（系统保存框，存到文件 App）。
@@ -42,6 +43,8 @@ struct MeView: View {
     @State private var showHeartRateSheet = false
     @State private var showWidgetGuideSheet = false
     @State private var showBrandAlert = false
+    @State private var avatarPickerItem: PhotosPickerItem?
+    @State private var showAvatarPicker = false
 
     private var profile: Profile { store.state.profile }
 
@@ -92,6 +95,18 @@ struct MeView: View {
         }
         .toolbar(.hidden, for: .navigationBar)
         .toast($toast)
+        .photosPicker(isPresented: $showAvatarPicker, selection: $avatarPickerItem, matching: .images, photoLibrary: .shared())
+        .onChange(of: avatarPickerItem) { _, newItem in
+            Task {
+                if let newItem,
+                   let data = try? await newItem.loadTransferable(type: Data.self),
+                   let uiImage = UIImage(data: data) {
+                    store.saveAvatarImage(uiImage)
+                    toast = "头像已更新并保存在本机"
+                }
+                avatarPickerItem = nil
+            }
+        }
         .fullScreenCover(isPresented: $showSettingsSheet) {
             SettingsView()
         }
@@ -200,7 +215,7 @@ struct MeView: View {
                         .font(.system(size: 15, weight: .semibold))
                         .foregroundStyle(Palette.text)
                 }
-                .buttonStyle(.stridePress)
+                .buttonStyle(.strideSpin)
                 .accessibilityLabel("设置")
             }
             .padding(.horizontal, 14)
@@ -211,24 +226,85 @@ struct MeView: View {
         .padding(.top, 6)
     }
 
-    // MARK: - 居中头像与昵称
+    // MARK: - 居中头像与昵称（支持本地自定义照片头像 + The Outsiders 极光金属徽章）
 
     private var avatarHeader: some View {
-        VStack(spacing: 10) {
-            Button {
-                showProfileEdit = true
-            } label: {
-                Circle()
-                    .fill(Color.white)
-                    .frame(width: 96, height: 96)
-                    .overlay {
-                        Image(systemName: "person.fill")
-                            .font(.system(size: 48))
-                            .foregroundStyle(Color(hex: 0xD1D1D6))
+        let _ = store.avatarRevision
+        let savedAvatar = store.loadAvatarImage()
+        let initial = String(profile.nickname.prefix(1)).uppercased()
+
+        return VStack(spacing: 10) {
+            ZStack(alignment: .bottomTrailing) {
+                Button {
+                    showAvatarPicker = true
+                } label: {
+                    Group {
+                        if let savedAvatar {
+                            Image(uiImage: savedAvatar)
+                                .resizable()
+                                .scaledToFill()
+                        } else {
+                            ZStack {
+                                LinearGradient(
+                                    colors: [Color(hex: 0x3A476E), Color(hex: 0x6D4A7E), Color(hex: 0x295E5A)],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                                Text(initial.isEmpty ? "S" : initial)
+                                    .font(.system(size: 40, weight: .black, design: .rounded))
+                                    .foregroundStyle(Color.white)
+                            }
+                        }
                     }
-                    .shadow(color: .black.opacity(0.4), radius: 12, y: 4)
+                    .frame(width: 96, height: 96)
+                    .clipShape(Circle())
+                    .overlay(
+                        Circle()
+                            .strokeBorder(
+                                LinearGradient(
+                                    colors: [Color.white.opacity(0.65), Palette.purple.opacity(0.45)],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                ),
+                                lineWidth: 2
+                            )
+                    )
+                    .shadow(color: .black.opacity(0.45), radius: 14, y: 6)
+                }
+                .buttonStyle(.stridePress)
+                .contextMenu {
+                    Button {
+                        showAvatarPicker = true
+                    } label: {
+                        Label("从相册更换头像", systemImage: "photo.on.rectangle")
+                    }
+                    Button {
+                        showProfileEdit = true
+                    } label: {
+                        Label("编辑昵称与档案", systemImage: "pencil")
+                    }
+                    if savedAvatar != nil {
+                        Button(role: .destructive) {
+                            store.clearAvatarImage()
+                            toast = "已恢复默认极光徽章头像"
+                        } label: {
+                            Label("恢复默认极光头像", systemImage: "sparkles")
+                        }
+                    }
+                }
+
+                Button {
+                    showAvatarPicker = true
+                } label: {
+                    Image(systemName: "camera.fill")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(Color.black)
+                        .frame(width: 28, height: 28)
+                        .background(Circle().fill(Palette.green))
+                        .overlay(Circle().strokeBorder(Palette.bg, lineWidth: 2))
+                }
+                .buttonStyle(.strideShimmer(glow: Palette.green))
             }
-            .buttonStyle(.stridePress)
 
             Text(profile.nickname)
                 .font(.system(size: 24, weight: .bold))
@@ -282,7 +358,7 @@ struct MeView: View {
         .card(radius: 22, fill: Palette.card, stroke: Palette.stroke)
     }
 
-    // MARK: - Stride Intelligence 炫彩声波入口（图 79）
+    // MARK: - Stride Intelligence 炫彩极光声波入口（图 79）
 
     private var intelligenceCard: some View {
         VStack(spacing: 0) {
@@ -290,23 +366,19 @@ struct MeView: View {
                 showCoachSheet = true
             } label: {
                 HStack(spacing: 12) {
-                    Image(systemName: "waveform")
-                        .font(.system(size: 18, weight: .bold))
-                        .foregroundStyle(
-                            LinearGradient(colors: [Palette.amber, Palette.coralHi, Palette.purple], startPoint: .leading, endPoint: .trailing)
-                        )
+                    AudioSpectrumBars(isPlaying: true, bpm: 116, color: Palette.purple, barCount: 4, maxHeight: 16)
                         .frame(width: 30)
 
                     Text(Brand.intelligenceName)
                         .font(.system(size: 15.5, weight: .bold))
                         .foregroundStyle(
-                            LinearGradient(colors: [Palette.coralHi, Palette.purple, Palette.blue], startPoint: .leading, endPoint: .trailing)
+                            LinearGradient(colors: [Palette.coralHi, Palette.purple, Palette.cyan], startPoint: .leading, endPoint: .trailing)
                         )
 
                     Spacer()
 
                     Text(ai.isConfigured ? "Gemini · 自动调度" : "本地教练")
-                        .font(.system(size: 11.5))
+                        .font(.system(size: 11.5, weight: .semibold))
                         .foregroundStyle(Palette.textDim)
                         .lineLimit(1)
                     Image(systemName: "chevron.right")
@@ -318,7 +390,7 @@ struct MeView: View {
             }
             .buttonStyle(.strideRow(radius: 22))
         }
-        .card(radius: 22, fill: Palette.card, stroke: Palette.stroke)
+        .luxuryCard(radius: 22, accent: Palette.purple)
     }
 
     // MARK: - 设备与提醒（图 78）

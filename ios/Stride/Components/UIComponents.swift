@@ -29,7 +29,7 @@ struct SectionHeader: View {
     }
 }
 
-// MARK: - Primary button
+// MARK: - Primary button (升级钛金流光 CTA + 按压触觉)
 
 struct PrimaryButton: View {
     let title: String
@@ -46,7 +46,7 @@ struct PrimaryButton: View {
                 if let subtitle {
                     Text(subtitle)
                         .font(.system(size: 12, weight: .medium))
-                        .opacity(0.65)
+                        .opacity(0.68)
                 }
             }
             .frame(maxWidth: .infinity)
@@ -54,10 +54,27 @@ struct PrimaryButton: View {
             .foregroundStyle(enabled ? Color.black : Palette.textDim)
             .background(
                 RoundedRectangle(cornerRadius: 22, style: .continuous)
-                    .fill(enabled ? tint : Palette.cardHigh)
+                    .fill(
+                        enabled
+                            ? AnyShapeStyle(
+                                LinearGradient(
+                                    colors: [tint, tint.opacity(0.86)],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+                            : AnyShapeStyle(Palette.cardHigh)
+                    )
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 22, style: .continuous)
+                    .strokeBorder(
+                        enabled ? Color.white.opacity(0.32) : Palette.stroke,
+                        lineWidth: 0.9
+                    )
             )
         }
-        .buttonStyle(StridePressButtonStyle(scale: 0.965, pressedOpacity: 0.9, haptic: .medium))
+        .buttonStyle(ShimmerCTAButtonStyle(scale: 0.965, glowColor: enabled ? tint : .clear))
         .disabled(!enabled)
     }
 }
@@ -77,7 +94,16 @@ struct SecondaryButton: View {
             .padding(.vertical, 10)
             .foregroundStyle(Palette.text)
             .background(Capsule().fill(Palette.cardHigh))
-            .overlay(Capsule().strokeBorder(Palette.stroke, lineWidth: 1))
+            .overlay(
+                Capsule().strokeBorder(
+                    LinearGradient(
+                        colors: [Color.white.opacity(0.24), Color.white.opacity(0.06)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    lineWidth: 0.9
+                )
+            )
         }
         .buttonStyle(.stridePress)
     }
@@ -170,7 +196,7 @@ struct StatTile: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(14)
-        .card(radius: Metrics.radiusSmall, fill: Palette.cardSoft)
+        .luxuryCard(radius: Metrics.radiusSmall, accent: tint == Palette.text ? Palette.blue : tint, fill: Palette.cardSoft)
     }
 }
 
@@ -221,7 +247,7 @@ struct EmptyHint: View {
     }
 }
 
-// MARK: - Toast
+// MARK: - Toast（升级灵动岛微光悬浮气泡）
 
 struct ToastView: View {
     let text: String
@@ -229,20 +255,20 @@ struct ToastView: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            Image(systemName: icon)
-                .foregroundStyle(Palette.green)
-                .symbolEffect(.bounce, value: text)
-            Text(text).font(.system(size: 14, weight: .medium)).foregroundStyle(Palette.text)
+            ZStack {
+                Circle()
+                    .fill(Palette.green.opacity(0.22))
+                    .frame(width: 24, height: 24)
+                Image(systemName: icon)
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(Palette.green)
+                    .symbolEffect(.bounce, value: text)
+            }
+            Text(text).font(.system(size: 13.5, weight: .semibold)).foregroundStyle(Palette.text)
         }
         .padding(.horizontal, 16)
-        .padding(.vertical, 11)
-        .background {
-            Capsule()
-                .fill(.ultraThinMaterial)
-                .overlay(Capsule().fill(Palette.cardHigh.opacity(0.65)))
-        }
-        .overlay(Capsule().strokeBorder(Palette.strokeHi, lineWidth: 1))
-        .shadow(color: .black.opacity(0.45), radius: 16, y: 8)
+        .padding(.vertical, 10)
+        .liquidGlassCapsule(tint: Palette.cardHigh.opacity(0.75))
     }
 }
 

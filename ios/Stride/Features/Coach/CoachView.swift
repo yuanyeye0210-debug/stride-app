@@ -11,6 +11,8 @@ struct CoachView: View {
     @State private var replyToken = 0
     @State private var appliedPlanTurnIDs: Set<UUID> = []
     @State private var appliedWorkoutTurnIDs: Set<UUID> = []
+    @State private var likedTurnIDs: Set<UUID> = []
+    @State private var speakingTurnID: UUID? = nil
     @State private var showQuickPrompts = false
     @State private var toast: String?
 
@@ -82,21 +84,39 @@ struct CoachView: View {
         .toast($toast)
     }
 
-    // MARK: - 头部
+    // MARK: - 头部（WHOOP AI 极光弥散顶栏 + 新开对话）
 
     private var header: some View {
         HStack(spacing: 10) {
             ZStack {
-                Circle().fill(Palette.purple.opacity(0.16)).frame(width: 32, height: 32)
+                AuroraBannerBackground()
+                    .clipShape(Circle())
+                    .frame(width: 32, height: 32)
                 Image(systemName: "sparkles")
-                    .font(.system(size: 13.5, weight: .semibold))
-                    .foregroundStyle(Palette.purple)
+                    .font(.system(size: 13.5, weight: .bold))
+                    .foregroundStyle(Color.white)
                     .symbolEffect(.pulse, isActive: sending)
             }
-            Text(ai.isConfigured ? "AI 教练" : "AI 教练 · 本地")
-                .font(.system(size: 15.5, weight: .semibold))
+            Text(ai.isConfigured ? "AI 教练 · Gemini" : "AI 教练 · 本地")
+                .font(.system(size: 15.5, weight: .bold))
                 .foregroundStyle(Palette.text)
             Spacer()
+            if messages.count > 1 {
+                Button {
+                    withAnimation(.snappy(duration: 0.22)) {
+                        store.clearChat()
+                    }
+                    toast = "已开启新一轮对话"
+                } label: {
+                    Image(systemName: "arrow.counterclockwise")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundStyle(Palette.textDim)
+                        .frame(width: 28, height: 28)
+                        .background(Circle().fill(Palette.cardHigh))
+                }
+                .buttonStyle(.strideSpin)
+                .accessibilityLabel("清空对话")
+            }
             HStack(spacing: 3) {
                 Text("余")
                 Text("\(remaining)")
@@ -108,9 +128,15 @@ struct CoachView: View {
             .font(.system(size: 12))
             .foregroundStyle(Palette.textFaint)
         }
-        .frame(height: 50)
+        .frame(height: 52)
         .padding(.horizontal, Metrics.page)
-        .background(Palette.bg)
+        .background(
+            ZStack {
+                Palette.bg
+                AuroraBannerBackground()
+                    .opacity(0.14)
+            }
+        )
         .overlay(Rectangle().fill(Palette.stroke).frame(height: 0.5), alignment: .bottom)
     }
 
@@ -204,22 +230,78 @@ struct CoachView: View {
 
     @ViewBuilder
     private func coachStructuredContent(turnID: UUID, rawText: String, parsed: CoachReplyStructure) -> some View {
-        if let card = parsed.workoutCard {
-            if !parsed.intro.isEmpty {
-                coachTextBubble(parsed.intro, copyText: CoachEngine.sanitizePlainText(rawText))
-                    .padding(.trailing, 32)
+        let cleanCopy = CoachEngine.sanitizePlainText(rawText)
+        VStack(alignment: .leading, spacing: 8) {
+            if let card = parsed.workoutCard {
+                if !parsed.intro.isEmpty {
+                    coachTextBubble(parsed.intro, copyText: cleanCopy)
+                        .padding(.trailing, 32)
+                }
+                inlineWorkoutCard(card, turnID: turnID, copyText: cleanCopy)
+                if !parsed.outro.isEmpty {
+                    coachTextBubble(parsed.outro, copyText: cleanCopy)
+                        .padding(.trailing, 32)
+                }
+            } else {
+                coachTextBubble(
+                    parsed.intro.isEmpty ? cleanCopy : parsed.intro,
+                    copyText: cleanCopy
+                )
             }
-            inlineWorkoutCard(card, turnID: turnID, copyText: CoachEngine.sanitizePlainText(rawText))
-            if !parsed.outro.isEmpty {
-                coachTextBubble(parsed.outro, copyText: CoachEngine.sanitizePlainText(rawText))
-                    .padding(.trailing, 32)
-            }
-        } else {
-            coachTextBubble(
-                parsed.intro.isEmpty ? CoachEngine.sanitizePlainText(rawText) : parsed.intro,
-                copyText: CoachEngine.sanitizePlainText(rawText)
-            )
+            coachActionRow(turnID: turnID, copyText: cleanCopy)
         }
+    }
+
+    private func coachActionRow(turnID: UUID, copyText: String) -> some View {
+        let liked = likedTurnIDs.contains(turnID)
+        let speaking = speakingTurnID == turnID
+        return HStack(spacing: 8) {
+            Button {
+                UIPasteboard.general.string = copyText
+                toast = "回复已复制"
+            } label: {
+                Image(systemName: "doc.on.doc")
+                    .font(.system(size: 11.5, weight: .semibold))
+                    .foregroundStyle(Palette.textDim)
+                    .frame(width: 28, height: 28)
+                    .background(Circle().fill(Palette.cardHigh))
+            }
+            .buttonStyle(.stridePress)
+
+            Button {
+                if speaking {
+                    speakingTurnID = nil
+                } else {
+                    speakingTurnID = turnID
+                    RunVoiceCoach.shared.speak(copyText)
+                    toast = "正在语音朗读教练建议"
+                }
+            } label: {
+                Image(systemName: speaking ? "speaker.wave.3.fill" : "speaker.wave.2")
+                    .font(.system(size: 11.5, weight: .semibold))
+                    .foregroundStyle(speaking ? Palette.purple : Palette.textDim)
+                    .frame(width: 28, height: 28)
+                    .background(Circle().fill(Palette.cardHigh))
+            }
+            .buttonStyle(.strideStepper(accent: Palette.purple))
+
+            Button {
+                if liked {
+                    likedTurnIDs.remove(turnID)
+                } else {
+                    likedTurnIDs.insert(turnID)
+                    toast = "已标记为有帮助"
+                }
+            } label: {
+                Image(systemName: liked ? "hand.thumbsup.fill" : "hand.thumbsup")
+                    .font(.system(size: 11.5, weight: .semibold))
+                    .foregroundStyle(liked ? Palette.green : Palette.textDim)
+                    .frame(width: 28, height: 28)
+                    .background(Circle().fill(Palette.cardHigh))
+            }
+            .buttonStyle(.strideHeart(accent: Palette.green))
+        }
+        .padding(.leading, 4)
     }
 
     private func coachTextBubble(_ text: String, copyText: String) -> some View {
@@ -372,23 +454,27 @@ struct CoachView: View {
 
     private var typing: some View {
         HStack(spacing: 8) {
-            HStack(spacing: 8) {
-                HStack(spacing: 4) {
-                    ForEach(0..<3) { i in
-                        Circle()
-                            .fill(Palette.textDim)
-                            .frame(width: 6, height: 6)
-                            .opacity(0.4)
-                            .animation(.easeInOut(duration: 0.6).repeatForever().delay(Double(i) * 0.15), value: sending)
+            TimelineView(.animation(minimumInterval: 1.0 / 24.0)) { timeline in
+                let t = timeline.date.timeIntervalSinceReferenceDate
+                HStack(spacing: 8) {
+                    HStack(spacing: 5) {
+                        ForEach(0..<3, id: \.self) { i in
+                            let phase = sin(t * 5.0 + Double(i) * 0.9) * 0.5 + 0.5
+                            Circle()
+                                .fill(Palette.purple)
+                                .frame(width: 6.5, height: 6.5)
+                                .scaleEffect(0.75 + phase * 0.45)
+                                .opacity(0.45 + phase * 0.55)
+                        }
                     }
+                    Text(retryAttempt.flatMap { AIRetryPolicy.retryStatusText(nextAttempt: $0) } ?? "正在推演训练方案…")
+                        .font(.system(size: 12.5, weight: .medium))
+                        .foregroundStyle(Palette.textDim)
                 }
-                Text(retryAttempt.flatMap { AIRetryPolicy.retryStatusText(nextAttempt: $0) } ?? "思考中…")
-                    .font(.system(size: 12.5))
-                    .foregroundStyle(Palette.textDim)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 11)
+                .luxuryCard(radius: 18, accent: Palette.purple)
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 11)
-            .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(Palette.card))
 
             Button {
                 activeTask?.cancel()
@@ -469,11 +555,17 @@ struct CoachView: View {
             } label: {
                 Image(systemName: "arrow.up")
                     .font(.system(size: 15, weight: .bold))
-                    .foregroundStyle(input.isEmpty || sending ? Palette.textFaint : Color.black)
+                    .foregroundStyle(input.isEmpty || sending ? Palette.textFaint : Color.white)
                     .frame(width: 42, height: 42)
-                    .background(Circle().fill(input.isEmpty || sending ? Palette.card : Color.white))
+                    .background {
+                        if input.isEmpty || sending {
+                            Circle().fill(Palette.card)
+                        } else {
+                            AuroraBannerBackground().clipShape(Circle())
+                        }
+                    }
             }
-            .buttonStyle(.stridePress)
+            .buttonStyle(.strideAurora)
             .disabled(input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || sending)
         }
         .padding(.horizontal, Metrics.page)

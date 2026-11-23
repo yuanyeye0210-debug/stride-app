@@ -114,12 +114,17 @@ struct WatchMotionStudioView: View {
                     Text("自动计次")
                         .font(.system(size: 11, weight: .semibold))
                         .foregroundStyle(Palette.textDim)
-                    Text("\(watchMotion.repCount)")
-                        .font(.system(size: 46, weight: .black, design: .rounded))
-                        .foregroundStyle(Palette.lime)
-                        .numericRoll(value: watchMotion.repCount)
+                    ZStack {
+                        RadarPulseRing(color: Palette.lime, isActive: watchMotion.isRunning, size: 62)
+                        ConfettiBurstView(trigger: watchMotion.repCount, colors: [Palette.lime, Palette.green, Palette.cyan])
+                        Text("\(watchMotion.repCount)")
+                            .font(.system(size: 46, weight: .black, design: .rounded))
+                            .foregroundStyle(Palette.lime)
+                            .numericRoll(value: watchMotion.repCount)
+                    }
                 }
             }
+            .sensoryFeedback(.impact(weight: .heavy), trigger: watchMotion.repCount)
 
             // 置信度进度条
             GeometryReader { geo in
@@ -157,7 +162,7 @@ struct WatchMotionStudioView: View {
                             .fill(watchMotion.isRunning ? Palette.coralHi : Palette.green)
                     )
                 }
-                .buttonStyle(.stridePress)
+                .buttonStyle(.strideShimmer(glow: watchMotion.isRunning ? Palette.coralHi : Palette.green))
 
                 Button {
                     watchMotion.resetReps()
@@ -170,11 +175,11 @@ struct WatchMotionStudioView: View {
                         .padding(.vertical, 12)
                         .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Palette.cardHigh))
                 }
-                .buttonStyle(.stridePress)
+                .buttonStyle(.strideSpin)
             }
         }
         .padding(16)
-        .card(radius: 22, fill: Palette.card, stroke: Palette.stroke)
+        .luxuryCard(radius: 22, accent: Palette.green)
     }
 
     private var imuWaveformChart: some View {

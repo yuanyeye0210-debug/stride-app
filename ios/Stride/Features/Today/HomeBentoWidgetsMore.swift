@@ -1,6 +1,6 @@
 import SwiftUI
 
-// MARK: - 7. 肌肉恢复 2×2 卡片
+// MARK: - 7. 肌肉恢复 2×2 卡片（曜石荧光渐变柱）
 
 struct MuscleRecoveryBentoCard: View {
     let items: [MuscleRecoveryItem]
@@ -14,9 +14,16 @@ struct MuscleRecoveryBentoCard: View {
     var body: some View {
         Button(action: onTap) {
             VStack(alignment: .leading, spacing: 6) {
-                Text("肌肉恢复")
-                    .font(.system(size: 15, weight: .bold))
-                    .foregroundStyle(Palette.text)
+                HStack {
+                    Text("肌肉恢复")
+                        .font(.system(size: 14.5, weight: .bold))
+                        .foregroundStyle(Palette.text)
+                    Spacer()
+                    Circle()
+                        .fill(Palette.lime)
+                        .frame(width: 6, height: 6)
+                        .shadow(color: Palette.lime, radius: 4)
+                }
 
                 (
                     Text("今天练 ")
@@ -46,19 +53,25 @@ struct MuscleRecoveryBentoCard: View {
                                     RoundedRectangle(cornerRadius: 6, style: .continuous)
                                         .fill(Color.white.opacity(0.06))
                                     RoundedRectangle(cornerRadius: 6, style: .continuous)
-                                        .fill(barColor)
+                                        .fill(
+                                            LinearGradient(
+                                                colors: [barColor, barColor.opacity(0.55)],
+                                                startPoint: .top,
+                                                endPoint: .bottom
+                                            )
+                                        )
                                         .frame(height: geo.size.height * ratio)
                                         .animation(.spring(response: 0.62, dampingFraction: 0.8), value: barsAppeared)
                                 }
                                 .overlay(
                                     RoundedRectangle(cornerRadius: 6, style: .continuous)
                                         .strokeBorder(
-                                            item.isRecommended ? Color.white.opacity(0.75) : Color.white.opacity(0.15),
-                                            lineWidth: item.isRecommended ? 1.4 : 0.8
+                                            item.isRecommended ? Color.white.opacity(0.75) : Color.white.opacity(0.14),
+                                            lineWidth: item.isRecommended ? 1.3 : 0.7
                                         )
                                 )
                             }
-                            .frame(height: 62)
+                            .frame(height: 60)
 
                             VStack(spacing: 1) {
                                 Text(item.group.rawValue)
@@ -74,7 +87,7 @@ struct MuscleRecoveryBentoCard: View {
             }
             .padding(16)
             .frame(height: 178)
-            .card(radius: Metrics.radius, fill: Palette.card, stroke: Palette.stroke)
+            .luxuryCard(radius: Metrics.radius, accent: Palette.lime, glowCorner: .topTrailing)
         }
         .buttonStyle(.strideCard)
         .onAppear {
@@ -85,7 +98,7 @@ struct MuscleRecoveryBentoCard: View {
     }
 }
 
-// MARK: - 8. 咖啡因代谢卡片
+// MARK: - 8. 咖啡因代谢卡片（琥珀流光时间窗）
 
 struct CaffeineBentoCard: View {
     let todayMg: Int
@@ -102,17 +115,18 @@ struct CaffeineBentoCard: View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
                 Text("咖啡因")
-                    .font(.system(size: 15, weight: .bold))
+                    .font(.system(size: 14.5, weight: .bold))
                     .foregroundStyle(Palette.text)
                 Spacer()
                 Button(action: onAdd) {
                     Image(systemName: "plus")
-                        .font(.system(size: 13, weight: .bold))
-                        .foregroundStyle(Palette.text)
+                        .font(.system(size: 12.5, weight: .bold))
+                        .foregroundStyle(Palette.amber)
                         .frame(width: 28, height: 28)
-                        .background(Circle().fill(Color.white.opacity(0.12)))
+                        .background(Circle().fill(Palette.amber.opacity(0.16)))
+                        .overlay(Circle().strokeBorder(Palette.amber.opacity(0.35), lineWidth: 0.7))
                 }
-                .buttonStyle(.stridePress)
+                .buttonStyle(.strideStepper(accent: Palette.amber))
                 .accessibilityLabel("记一杯咖啡因")
             }
 
@@ -120,30 +134,30 @@ struct CaffeineBentoCard: View {
                 HStack(alignment: .firstTextBaseline, spacing: 3) {
                     Text("\(todayMg)")
                         .font(.system(size: 22, weight: .bold, design: .rounded))
-                        .foregroundStyle(todayMg > limitMg ? Palette.amber : Palette.text)
+                        .foregroundStyle(todayMg > limitMg ? Palette.coralHi : Palette.text)
                         .numericRoll(value: todayMg)
-                    Text("/ \(limitMg) 毫克")
+                    Text("/ \(limitMg) mg")
                         .font(.system(size: 11, weight: .medium))
                         .foregroundStyle(Palette.textDim)
                 }
                 Spacer()
                 Image(systemName: "cup.and.saucer.fill")
-                    .font(.system(size: 16))
-                    .foregroundStyle(Color.white.opacity(0.75))
+                    .font(.system(size: 15))
+                    .foregroundStyle(Palette.amber.opacity(0.85))
             }
 
             Spacer(minLength: 2)
 
             VStack(spacing: 5) {
-                Text("最佳饮用时间")
+                Text("最佳饮用窗口")
                     .font(.system(size: 10))
                     .foregroundStyle(Palette.textFaint)
 
                 HStack(spacing: 4) {
                     Capsule()
                         .fill(Color.white.opacity(0.06))
-                        .overlay(Capsule().strokeBorder(Color.white.opacity(0.15), lineWidth: 0.7))
-                        .frame(width: 30, height: 14)
+                        .overlay(Capsule().strokeBorder(Color.white.opacity(0.14), lineWidth: 0.7))
+                        .frame(width: 28, height: 13)
 
                     Capsule()
                         .fill(
@@ -153,15 +167,15 @@ struct CaffeineBentoCard: View {
                                 endPoint: .trailing
                             )
                         )
-                        .overlay(Capsule().strokeBorder(Color(hex: 0xFFD48D).opacity(0.7), lineWidth: 0.8))
+                        .overlay(Capsule().strokeBorder(Color(hex: 0xFFD48D).opacity(0.75), lineWidth: 0.8))
                         .shadow(color: Color(hex: 0xFF9E3D).opacity(0.45), radius: 6)
                         .frame(maxWidth: .infinity)
-                        .frame(height: 14)
+                        .frame(height: 13)
 
                     Capsule()
                         .fill(Color.white.opacity(0.06))
-                        .overlay(Capsule().strokeBorder(Color.white.opacity(0.15), lineWidth: 0.7))
-                        .frame(width: 34, height: 14)
+                        .overlay(Capsule().strokeBorder(Color.white.opacity(0.14), lineWidth: 0.7))
+                        .frame(width: 32, height: 13)
                 }
 
                 HStack {
@@ -171,7 +185,7 @@ struct CaffeineBentoCard: View {
                     Spacer()
                     Text(window.windowLabel)
                         .font(.system(size: 10, weight: .semibold))
-                        .foregroundStyle(Palette.text)
+                        .foregroundStyle(Palette.amber)
                     Spacer()
                     Text("入睡")
                         .font(.system(size: 9.5))
@@ -180,10 +194,10 @@ struct CaffeineBentoCard: View {
             }
 
             HStack(spacing: 5) {
-                Image(systemName: "moon.fill")
+                Image(systemName: "moon.stars.fill")
                     .font(.system(size: 10))
                     .foregroundStyle(Palette.purple)
-                Text("预计入睡 \(CaffeineCalculator.formattedSleepTime(hour: sleepHour, minute: sleepMinute))")
+                Text("入睡 \(CaffeineCalculator.formattedSleepTime(hour: sleepHour, minute: sleepMinute))")
                     .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(Palette.textDim)
             }
@@ -191,13 +205,13 @@ struct CaffeineBentoCard: View {
         }
         .padding(16)
         .frame(height: 178)
-        .card(radius: Metrics.radius, fill: Palette.card, stroke: Palette.stroke)
+        .luxuryCard(radius: Metrics.radius, accent: Palette.amber, glowCorner: .topTrailing)
         .contentShape(Rectangle())
         .onTapGesture(perform: onAdd)
     }
 }
 
-// MARK: - 9. Stride 食堂锯齿小票卡片
+// MARK: - 9. Stride 食堂暗夜碳黑锯齿小票卡片（告别灰白底，升级 Obsidian Receipt）
 
 struct FoodReceiptBentoCard: View {
     let foods: [FoodEntry]
@@ -213,23 +227,20 @@ struct FoodReceiptBentoCard: View {
 
     var body: some View {
         ZStack(alignment: .bottomTrailing) {
-            RoundedRectangle(cornerRadius: Metrics.radius, style: .continuous)
-                .fill(Color(hex: 0xECECEE))
-
             VStack(alignment: .leading, spacing: 6) {
                 Text("\(Brand.canteenTitle) · \(dateBadge)")
-                    .font(.system(size: 11.5, weight: .bold, design: .monospaced))
-                    .foregroundStyle(Color(hex: 0x1E1E22))
+                    .font(.system(size: 11, weight: .bold, design: .monospaced))
+                    .foregroundStyle(Palette.yellow)
                     .frame(maxWidth: .infinity, alignment: .center)
 
                 Rectangle()
-                    .fill(Color.black.opacity(0.14))
+                    .fill(Color.white.opacity(0.12))
                     .frame(height: 0.7)
 
                 if foods.isEmpty {
                     Text("今天还没记 · 点 + 记一餐")
                         .font(.system(size: 10.5))
-                        .foregroundStyle(Color(hex: 0x7A7A82))
+                        .foregroundStyle(Palette.textDim)
                         .frame(maxWidth: .infinity, alignment: .center)
                         .padding(.vertical, 6)
                 } else {
@@ -238,12 +249,12 @@ struct FoodReceiptBentoCard: View {
                             HStack {
                                 Text(entry.items.first?.name ?? entry.meal.rawValue)
                                     .font(.system(size: 10.5, weight: .medium))
-                                    .foregroundStyle(Color(hex: 0x2B2B30))
+                                    .foregroundStyle(Palette.text)
                                     .lineLimit(1)
                                 Spacer()
                                 Text("\(Int(entry.kcal.rounded()))")
                                     .font(.system(size: 10.5, weight: .semibold, design: .monospaced))
-                                    .foregroundStyle(Color(hex: 0x55555D))
+                                    .foregroundStyle(Palette.textDim)
                             }
                         }
                     }
@@ -251,28 +262,28 @@ struct FoodReceiptBentoCard: View {
                 }
 
                 DashedLine()
-                    .stroke(Color.black.opacity(0.18), style: StrokeStyle(lineWidth: 1, dash: [3, 3]))
+                    .stroke(Color.white.opacity(0.18), style: StrokeStyle(lineWidth: 1, dash: [3, 3]))
                     .frame(height: 1)
 
                 HStack {
                     Text("合计")
-                        .font(.system(size: 12.5, weight: .bold))
-                        .foregroundStyle(Color(hex: 0x18181B))
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundStyle(Palette.text)
                     Spacer()
                     Text(WaterLog.grouped(eatenKcal))
                         .font(.system(size: 13.5, weight: .heavy, design: .monospaced))
-                        .foregroundStyle(Color(hex: 0x18181B))
+                        .foregroundStyle(Palette.text)
                         .numericRoll(value: eatenKcal)
                 }
 
                 HStack {
                     Text(remainingKcal >= 0 ? "还能吃" : "超出")
                         .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(remainingKcal >= 0 ? Palette.green : Palette.coral)
+                        .foregroundStyle(remainingKcal >= 0 ? Palette.green : Palette.coralHi)
                     Spacer()
                     Text(WaterLog.grouped(abs(remainingKcal)))
                         .font(.system(size: 12, weight: .bold, design: .monospaced))
-                        .foregroundStyle(remainingKcal >= 0 ? Palette.green : Palette.coral)
+                        .foregroundStyle(remainingKcal >= 0 ? Palette.green : Palette.coralHi)
                         .numericRoll(value: remainingKcal)
                 }
 
@@ -284,8 +295,18 @@ struct FoodReceiptBentoCard: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(
                 ReceiptPaperShape(toothCount: 13)
-                    .fill(Color.white)
-                    .shadow(color: .black.opacity(0.08), radius: 4, y: 2)
+                    .fill(
+                        LinearGradient(
+                            colors: [Color(hex: 0x1D2130), Palette.receiptDark],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
+                    .overlay(
+                        ReceiptPaperShape(toothCount: 13)
+                            .stroke(Color.white.opacity(0.15), lineWidth: 0.8)
+                    )
+                    .shadow(color: .black.opacity(0.35), radius: 6, y: 3)
             )
             .padding(.horizontal, 8)
             .padding(.top, 8)
@@ -293,17 +314,18 @@ struct FoodReceiptBentoCard: View {
 
             Button(action: onAddFood) {
                 Image(systemName: "plus")
-                    .font(.system(size: 14, weight: .bold))
-                    .foregroundStyle(Color.white)
+                    .font(.system(size: 13.5, weight: .bold))
+                    .foregroundStyle(Color.black)
                     .frame(width: 30, height: 30)
-                    .background(Circle().fill(Color(hex: 0x0F0F12)))
-                    .shadow(color: .black.opacity(0.25), radius: 5, y: 2)
+                    .background(Circle().fill(Palette.green))
+                    .shadow(color: Palette.green.opacity(0.45), radius: 6, y: 2)
             }
-            .buttonStyle(.stridePress)
+            .buttonStyle(.strideShimmer(glow: Palette.green))
             .padding(10)
             .accessibilityLabel("记一餐")
         }
         .frame(height: 178)
+        .luxuryCard(radius: Metrics.radius, accent: Palette.green, glowCorner: .bottomTrailing, fill: Palette.cardSoft)
         .clipShape(RoundedRectangle(cornerRadius: Metrics.radius, style: .continuous))
         .contentShape(Rectangle())
         .onTapGesture(perform: onAddFood)
@@ -347,13 +369,14 @@ private struct ReceiptPaperShape: Shape {
     }
 }
 
-// MARK: - 10. 活动三环 2×2 卡片
+// MARK: - 10. 活动三环 2×2 卡片（带心电呼吸中心）
 
 struct ActivityRingsBentoCard: View {
     let moveProgress: Double
     let exerciseProgress: Double
     let standProgress: Double
     var onTap: () -> Void
+    @State private var ecgBeat = false
 
     var body: some View {
         Button(action: onTap) {
@@ -383,24 +406,31 @@ struct ActivityRingsBentoCard: View {
                 .frame(width: 68, height: 68)
 
                 Circle()
-                    .fill(Color.white)
+                    .fill(Palette.cardHigh)
                     .frame(width: 34, height: 34)
+                    .overlay(Circle().strokeBorder(Color.white.opacity(0.28), lineWidth: 1))
                     .overlay {
                         Image(systemName: "waveform.path.ecg")
-                            .font(.system(size: 16, weight: .bold))
-                            .foregroundStyle(Color.black)
+                            .font(.system(size: 15, weight: .bold))
+                            .foregroundStyle(Palette.ringMove)
+                            .scaleEffect(ecgBeat ? 1.12 : 0.94)
                     }
             }
             .frame(maxWidth: .infinity)
             .frame(height: 178)
-            .card(radius: Metrics.radius, fill: Palette.card, stroke: Palette.stroke)
+            .luxuryCard(radius: Metrics.radius, accent: Palette.ringMove, glowCorner: .topLeading)
         }
         .buttonStyle(.strideCard)
+        .onAppear {
+            withAnimation(.easeInOut(duration: 1.1).repeatForever(autoreverses: true)) {
+                ecgBeat = true
+            }
+        }
         .accessibilityLabel("今日活动三环")
     }
 }
 
-// MARK: - 11. 本月训练时长卷尺卡片
+// MARK: - 11. 本月训练时长黑金卷尺卡片
 
 struct MonthlyHoursBentoCard: View {
     let hours: Double
@@ -427,8 +457,8 @@ struct MonthlyHoursBentoCard: View {
                             .foregroundStyle(Palette.text)
                         Spacer()
                         Text("\(count) 次")
-                            .font(.system(size: 10.5, weight: .medium))
-                            .foregroundStyle(Palette.textFaint)
+                            .font(.system(size: 10.5, weight: .semibold))
+                            .foregroundStyle(Palette.textDim)
                             .numericRoll(value: count)
                     }
                 }
@@ -440,7 +470,7 @@ struct MonthlyHoursBentoCard: View {
                     .offset(y: -2)
             }
             .frame(height: 178)
-            .card(radius: Metrics.radius, fill: Palette.card, stroke: Palette.stroke)
+            .luxuryCard(radius: Metrics.radius, accent: Palette.yellow, glowCorner: .bottomTrailing)
             .clipShape(RoundedRectangle(cornerRadius: Metrics.radius, style: .continuous))
         }
         .buttonStyle(.strideCard)
@@ -459,7 +489,7 @@ private struct TapeMeasureView: View {
             context.fill(
                 Path(rect),
                 with: .linearGradient(
-                    Gradient(colors: [Color(hex: 0xE6C619), Color(hex: 0xFFE338), Color(hex: 0xDFBA12)]),
+                    Gradient(colors: [Color(hex: 0xD9B036), Color(hex: 0xF7D768), Color(hex: 0xC89D24)]),
                     startPoint: CGPoint(x: 0, y: bandTop),
                     endPoint: CGPoint(x: size.width, y: bandTop + bandHeight)
                 )
@@ -497,7 +527,7 @@ private struct TapeMeasureView: View {
                 }
             }
 
-            // 红色指针 + 顶部三角
+            // 绯红指针 + 顶部三角
             let cx = size.width / 2
             var needle = Path()
             needle.move(to: CGPoint(x: cx, y: 2))

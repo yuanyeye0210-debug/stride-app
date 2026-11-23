@@ -68,7 +68,7 @@ struct SessionView: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                ScreenBackground()
+                ScreenBackground(accent: Palette.green, secondaryAccent: Palette.blue)
 
                 VStack(spacing: 0) {
                     summaryBar
@@ -82,9 +82,21 @@ struct SessionView: View {
                                 exerciseCard(index: i)
                             }
                             addButton
+
+                            if draft.doneSets > 0 {
+                                SlideToCompleteBar(
+                                    title: "滑动完成本次训练（已练 \(draft.doneSets) 组）",
+                                    tint: Palette.green,
+                                    icon: "flag.checkered"
+                                ) {
+                                    save()
+                                }
+                                .padding(.top, 6)
+                            }
                         }
                         .padding(.horizontal, Metrics.page)
-                        .padding(.bottom, 120)
+                        .padding(.top, 10)
+                        .padding(.bottom, 130)
                     }
                 }
 
@@ -145,11 +157,11 @@ struct SessionView: View {
 
     private var summaryBar: some View {
         HStack(spacing: 0) {
-            metric("\(elapsed / 60):\(String(format: "%02d", elapsed % 60))", "用时")
+            metric("\(elapsed / 60):\(String(format: "%02d", elapsed % 60))", "用时", tint: Palette.text)
             divider
-            metric("\(draft.doneSets)/\(draft.totalSets)", "组数")
+            metric("\(draft.doneSets)/\(draft.totalSets)", "完成组", tint: Palette.green)
             divider
-            metric("\(Int(volume))", "容量 kg")
+            metric("\(Int(volume))", "容量 kg", tint: Palette.blue)
         }
         .padding(.vertical, 12)
         .background(Palette.card)
@@ -160,11 +172,11 @@ struct SessionView: View {
         Rectangle().fill(Palette.stroke).frame(width: 0.5, height: 26)
     }
 
-    private func metric(_ value: String, _ label: String) -> some View {
+    private func metric(_ value: String, _ label: String, tint: Color) -> some View {
         VStack(spacing: 2) {
             Text(value)
                 .font(.system(size: 17, weight: .bold, design: .rounded))
-                .foregroundStyle(Palette.text)
+                .foregroundStyle(tint)
                 .numericRoll(value: value)
             Text(label)
                 .font(.system(size: 10))
@@ -184,7 +196,10 @@ struct SessionView: View {
             Button {
                 showWatchSheet = true
             } label: {
-                HStack(spacing: 5) {
+                HStack(spacing: 6) {
+                    Circle()
+                        .fill(watchMotion.isRunning ? Palette.green : Palette.textFaint)
+                        .frame(width: 6, height: 6)
                     Image(systemName: "applewatch")
                         .font(.system(size: 11, weight: .bold))
                         .foregroundStyle(watchMotion.isRunning ? Palette.green : Palette.textDim)
@@ -195,9 +210,10 @@ struct SessionView: View {
                         .foregroundStyle(Palette.text)
                         .lineLimit(1)
                 }
-                .padding(.horizontal, 10)
+                .padding(.horizontal, 11)
                 .padding(.vertical, 6)
                 .background(Capsule().fill(watchMotion.isRunning ? Palette.greenDeep : Palette.cardHigh))
+                .overlay(Capsule().strokeBorder(watchMotion.isRunning ? Palette.green.opacity(0.45) : Palette.stroke, lineWidth: 0.7))
             }
             .buttonStyle(.stridePress)
 
@@ -215,9 +231,10 @@ struct SessionView: View {
                         .foregroundStyle(Palette.text)
                         .lineLimit(1)
                 }
-                .padding(.horizontal, 10)
+                .padding(.horizontal, 11)
                 .padding(.vertical, 6)
                 .background(Capsule().fill(Palette.cardHigh))
+                .overlay(Capsule().strokeBorder(headphone.nodToCompleteSetEnabled ? Palette.blue.opacity(0.4) : Palette.stroke, lineWidth: 0.7))
             }
             .buttonStyle(.stridePress)
         }
@@ -227,11 +244,13 @@ struct SessionView: View {
         .overlay(Rectangle().fill(Palette.stroke).frame(height: 0.5), alignment: .bottom)
     }
 
-    // MARK: - 动作卡
+    // MARK: - 动作卡（Ladder 风格：聚焦组高亮 + 单手快捷微调芯片）
 
     private func exerciseCard(index: Int) -> some View {
         let ex = draft.exercises[index]
         let isSuperset = ex.supersetGroupID != nil
+        let activeSetIndex = ex.sets.firstIndex(where: { !$0.done })
+
         return VStack(alignment: .leading, spacing: 10) {
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
@@ -245,12 +264,12 @@ struct SessionView: View {
                                 .background(Capsule().fill(Palette.purple))
                         }
                         Text(ex.name)
-                            .font(.system(size: 16, weight: .semibold))
+                            .font(.system(size: 16, weight: .bold))
                             .foregroundStyle(Palette.text)
                     }
                     Text("\(ex.group.rawValue) · 休息 \(ex.restSec)″")
                         .font(.system(size: 11))
-                        .foregroundStyle(Palette.textFaint)
+                        .foregroundStyle(Palette.textDim)
                 }
                 Spacer()
                 Menu {
@@ -284,46 +303,111 @@ struct SessionView: View {
                 }
             }
 
+            // 单手快捷加减微调药丸（针对当前激活组或最后一组）
+            if !ex.sets.isEmpty {
+                let targetSet = activeSetIndex ?? (ex.sets.count - 1)
+                HStack(spacing: 6) {
+                    Text("第\(targetSet + 1)组快调")
+                        .font(.system(size: 10.5, weight: .semibold))
+                        .foregroundStyle(Palette.greenText)
+                    Spacer()
+                    quickAdjustPill("-2.5kg", accent: Palette.blue) {
+                        let cur = draft.exercises[index].sets[targetSet].weight
+                        draft.exercises[index].sets[targetSet].weight = max(0, cur - 2.5)
+                    }
+                    quickAdjustPill("+2.5kg", accent: Palette.blue) {
+                        let cur = draft.exercises[index].sets[targetSet].weight
+                        draft.exercises[index].sets[targetSet].weight = cur + 2.5
+                    }
+                    if ex.isTimed {
+                        quickAdjustPill("+15s", accent: Palette.amber) {
+                            draft.exercises[index].sets[targetSet].seconds += 15
+                        }
+                    } else {
+                        quickAdjustPill("-1次", accent: Palette.green) {
+                            let cur = draft.exercises[index].sets[targetSet].reps
+                            draft.exercises[index].sets[targetSet].reps = max(1, cur - 1)
+                        }
+                        quickAdjustPill("+1次", accent: Palette.green) {
+                            draft.exercises[index].sets[targetSet].reps += 1
+                        }
+                    }
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Palette.cardSoft))
+            }
+
             HStack(spacing: 8) {
                 Text("组").frame(width: 26, alignment: .leading)
-                Text("重量").frame(maxWidth: .infinity, alignment: .leading)
+                Text("重量 kg").frame(maxWidth: .infinity, alignment: .leading)
                 Text(ex.isTimed ? "秒" : "次数").frame(maxWidth: .infinity, alignment: .leading)
                 Text("RPE").frame(width: 44, alignment: .leading)
-                Spacer().frame(width: 30)
+                Spacer().frame(width: 34)
             }
             .font(.system(size: 10, weight: .semibold))
             .foregroundStyle(Palette.textFaint)
 
             ForEach(ex.sets.indices, id: \.self) { j in
-                setRow(exerciseIndex: index, setIndex: j)
+                setRow(exerciseIndex: index, setIndex: j, isFocused: activeSetIndex == j)
             }
 
-            Button {
-                var sets = draft.exercises[index].sets
-                let last = sets.last
-                sets.append(
-                    SetEntry(
-                        weight: last?.weight ?? 0,
-                        reps: last?.reps ?? 8,
-                        seconds: last?.seconds ?? 0
+            HStack {
+                Button {
+                    var sets = draft.exercises[index].sets
+                    let last = sets.last
+                    sets.append(
+                        SetEntry(
+                            weight: last?.weight ?? 0,
+                            reps: last?.reps ?? 8,
+                            seconds: last?.seconds ?? 0
+                        )
                     )
-                )
-                draft.exercises[index].sets = sets
-            } label: {
-                HStack(spacing: 5) {
-                    Image(systemName: "plus").font(.system(size: 11, weight: .bold))
-                    Text("加一组").font(.system(size: 13, weight: .semibold))
+                    draft.exercises[index].sets = sets
+                } label: {
+                    HStack(spacing: 5) {
+                        Image(systemName: "plus").font(.system(size: 11, weight: .bold))
+                        Text("加一组").font(.system(size: 13, weight: .semibold))
+                    }
+                    .foregroundStyle(Palette.greenText)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(Capsule().fill(Palette.greenDeep.opacity(0.65)))
                 }
-                .foregroundStyle(Palette.textDim)
+                .buttonStyle(.strideStepper(accent: Palette.green))
+
+                Spacer()
+
+                if draft.exercises[index].sets.count > 1 {
+                    Button {
+                        draft.exercises[index].sets.removeLast()
+                    } label: {
+                        Text("删末组")
+                            .font(.system(size: 11.5, weight: .medium))
+                            .foregroundStyle(Palette.textFaint)
+                    }
+                    .buttonStyle(.stridePress)
+                }
             }
-            .buttonStyle(.stridePress)
         }
         .padding(16)
-        .card(
+        .luxuryCard(
             radius: 22,
-            fill: Palette.card,
-            stroke: isSuperset ? Palette.purple.opacity(0.6) : Palette.stroke
+            accent: isSuperset ? Palette.purple : ex.group.tint,
+            glowCorner: .topTrailing
         )
+    }
+
+    private func quickAdjustPill(_ title: String, accent: Color, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(title)
+                .font(.system(size: 11, weight: .bold, design: .rounded))
+                .foregroundStyle(accent)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(RoundedRectangle(cornerRadius: 7, style: .continuous).fill(accent.opacity(0.14)))
+        }
+        .buttonStyle(.strideStepper(accent: accent))
     }
 
     private func toggleSupersetWithNext(index: Int) {
@@ -342,11 +426,11 @@ struct SessionView: View {
         }
     }
 
-    private func setRow(exerciseIndex i: Int, setIndex j: Int) -> some View {
+    private func setRow(exerciseIndex i: Int, setIndex j: Int, isFocused: Bool) -> some View {
         let set = draft.exercises[i].sets[j]
         let badgeColor: Color = {
             switch set.setType {
-            case .normal: return Palette.textFaint
+            case .normal: return isFocused ? Palette.green : Palette.textFaint
             case .warmup: return Palette.amber
             case .drop: return Palette.coralHi
             case .failure: return Palette.purple
@@ -368,7 +452,7 @@ struct SessionView: View {
                             .fill(set.setType == .normal ? Palette.cardHigh : badgeColor)
                     )
             }
-            .buttonStyle(.stridePress)
+            .buttonStyle(.strideStepper(accent: badgeColor))
             .frame(width: 26, alignment: .leading)
 
             TextField("0", value: $draft.exercises[i].sets[j].weight, format: .number)
@@ -416,23 +500,31 @@ struct SessionView: View {
                 .background(RoundedRectangle(cornerRadius: 9).fill(Palette.cardHigh))
                 .frame(width: 44)
 
-            Button {
+            SetCheckBurstButton(isDone: set.done, size: 22, accent: Palette.green) {
                 withAnimation(.spring(response: 0.28, dampingFraction: 0.7)) {
                     toggleSet(i: i, j: j)
                 }
                 if draft.exercises[i].sets[j].done {
                     setDoneToken += 1
                 }
-            } label: {
-                Image(systemName: set.done ? "checkmark.circle.fill" : "circle")
-                    .font(.system(size: 21, weight: .medium))
-                    .foregroundStyle(set.done ? Palette.green : Palette.strokeHi)
-                    .symbolEffect(.bounce, value: set.done)
             }
-            .buttonStyle(.stridePress)
-            .frame(width: 30)
+            .frame(width: 34)
         }
-        .opacity(set.done ? 0.75 : 1)
+        .padding(.horizontal, isFocused ? 6 : 0)
+        .padding(.vertical, isFocused ? 5 : 1)
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(isFocused ? Palette.green.opacity(0.10) : Color.clear)
+                .overlay(alignment: .leading) {
+                    if isFocused {
+                        Capsule()
+                            .fill(Palette.green)
+                            .frame(width: 3)
+                            .padding(.vertical, 4)
+                    }
+                }
+        )
+        .opacity(set.done ? 0.78 : 1)
     }
 
     // MARK: - 加动作
@@ -442,23 +534,23 @@ struct SessionView: View {
             showLibrary = true
         } label: {
             HStack(spacing: 6) {
-                Image(systemName: "plus.circle.fill").font(.system(size: 15))
-                Text("添加动作").font(.system(size: 15, weight: .semibold))
+                Image(systemName: "plus.circle.fill").font(.system(size: 15)).foregroundStyle(Palette.green)
+                Text("从 77 个真人视频库添加动作").font(.system(size: 15, weight: .semibold))
             }
             .foregroundStyle(Palette.text)
             .frame(maxWidth: .infinity)
             .padding(.vertical, 15)
-            .card(radius: 20, fill: Palette.cardSoft, stroke: Palette.stroke)
+            .luxuryCard(radius: 20, accent: Palette.green, fill: Palette.cardSoft)
         }
         .buttonStyle(.stridePress)
     }
 
-    // MARK: - 休息条
+    // MARK: - 组间休息条（新增 -15s / +15s 棘轮微调 + 液态玻璃浮层）
 
     private var restBar: some View {
         VStack {
             Spacer()
-            HStack(spacing: 14) {
+            HStack(spacing: 12) {
                 ZStack {
                     Circle().stroke(Palette.cardHigh, lineWidth: 4)
                     Circle()
@@ -468,33 +560,57 @@ struct SessionView: View {
                     Text("\(restLeft)")
                         .font(.system(size: 13, weight: .bold, design: .rounded))
                         .foregroundStyle(Palette.text)
+                        .numericRoll(value: restLeft, countsDown: true)
                 }
-                .frame(width: 42, height: 42)
+                .frame(width: 44, height: 44)
 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("休息中").font(.system(size: 14, weight: .semibold)).foregroundStyle(Palette.text)
-                    Text("下一组准备好了就继续").font(.system(size: 11)).foregroundStyle(Palette.textDim)
+                    Text("组间休息中").font(.system(size: 14, weight: .bold)).foregroundStyle(Palette.text)
+                    Text("呼吸调整 · 准备下一组").font(.system(size: 11)).foregroundStyle(Palette.textDim)
                 }
+
                 Spacer()
+
+                Button {
+                    restLeft = max(5, restLeft - 15)
+                } label: {
+                    Text("-15s")
+                        .font(.system(size: 11.5, weight: .bold, design: .rounded))
+                        .foregroundStyle(Palette.text)
+                        .padding(.horizontal, 9)
+                        .padding(.vertical, 7)
+                        .background(Capsule().fill(Color.white.opacity(0.14)))
+                }
+                .buttonStyle(.strideStepper(accent: Palette.green))
+
+                Button {
+                    restLeft += 15
+                    restTotal = max(restTotal, restLeft)
+                } label: {
+                    Text("+15s")
+                        .font(.system(size: 11.5, weight: .bold, design: .rounded))
+                        .foregroundStyle(Palette.text)
+                        .padding(.horizontal, 9)
+                        .padding(.vertical, 7)
+                        .background(Capsule().fill(Color.white.opacity(0.14)))
+                }
+                .buttonStyle(.strideStepper(accent: Palette.green))
+
                 Button {
                     restLeft = 0
                     restTotal = 0
                 } label: {
                     Text("跳过")
-                        .font(.system(size: 13, weight: .bold))
+                        .font(.system(size: 12.5, weight: .bold))
                         .foregroundStyle(Color.black)
-                        .padding(.horizontal, 14)
+                        .padding(.horizontal, 13)
                         .padding(.vertical, 8)
-                        .background(Capsule().fill(Color.white))
+                        .background(Capsule().fill(Palette.green))
                 }
-                .buttonStyle(.stridePress)
+                .buttonStyle(.strideShimmer(glow: Palette.green))
             }
             .padding(14)
-            .background(
-                RoundedRectangle(cornerRadius: 22, style: .continuous)
-                    .fill(Palette.cardHigh)
-                    .shadow(color: .black.opacity(0.5), radius: 18, y: -4)
-            )
+            .liquidGlassCapsule(tint: Palette.cardHigh.opacity(0.85))
             .padding(.horizontal, Metrics.page)
             .padding(.bottom, 12)
         }
@@ -560,7 +676,6 @@ struct SessionView: View {
         let minutes = Double(max(elapsed, 60)) / 60.0
         let avgMET = draft.exercises.isEmpty ? 5.0 : 6.0
         let weight = store.state.profile.weightKg
-        // kcal/min = MET × 3.5 × kg / 200
         let perMinute = avgMET * 3.5 * weight / 200.0
         return max(20, Int(perMinute * minutes))
     }

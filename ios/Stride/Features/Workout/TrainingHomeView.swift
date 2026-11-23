@@ -76,7 +76,7 @@ struct TrainingHomeView: View {
                     regenerate()
                 } label: {
                     HStack(spacing: 4) {
-                        Image(systemName: "sparkles").font(.system(size: 11, weight: .bold))
+                        Image(systemName: "sparkles").font(.system(size: 11, weight: .bold)).foregroundStyle(Palette.yellow)
                         Text("重排").font(.system(size: 12, weight: .semibold))
                     }
                     .foregroundStyle(Palette.text)
@@ -84,7 +84,7 @@ struct TrainingHomeView: View {
                     .padding(.vertical, 7)
                     .background(Capsule().fill(Palette.cardHigh))
                 }
-                .buttonStyle(.stridePress)
+                .buttonStyle(.strideSpin)
             }
 
             if let plan = store.state.plan {
@@ -176,9 +176,9 @@ struct TrainingHomeView: View {
                 .foregroundStyle(Color.black)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 15)
-                .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(Color.white))
+                .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(Palette.green))
             }
-            .buttonStyle(.stridePress)
+            .buttonStyle(.strideShimmer(glow: Palette.green))
 
             Button {
                 draft = .empty()

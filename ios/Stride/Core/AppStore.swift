@@ -13,6 +13,9 @@ final class AppStore: ObservableObject {
     /// 启动时发现的数据问题（例如 state.json 损坏已被隔离）。平时为 nil。
     @Published var dataIssue: DataIssue?
 
+    /// 头像文件更新令牌，用于在 MeView / ProgressViewScreen 等位置即时刷新自定义头像。
+    @Published var avatarRevision: Int = 0
+
     private let fileURL: URL
     private var saveTask: Task<Void, Never>?
     private let calendar = Calendar.current
@@ -353,6 +356,17 @@ final class AppStore: ObservableObject {
         triggerHaptic(.light)
     }
 
+    /// 记录或更新指定日期的睡眠总分钟数（限位 60...960 分钟）。
+    func recordSleep(minutes: Int, on date: Date = Date()) {
+        let clamped = min(max(minutes, 60), 960)
+        if let idx = state.snapshots.firstIndex(where: { calendar.isDate($0.date, inSameDayAs: date) }) {
+            state.snapshots[idx].sleepMinutes = clamped
+        } else {
+            state.snapshots.append(DailySnapshot(date: date, sleepMinutes: clamped))
+        }
+        triggerHaptic(.light)
+    }
+
     // MARK: - 饮水
 
     func todayWaterMl(now: Date = Date()) -> Int {
@@ -479,6 +493,43 @@ final class AppStore: ObservableObject {
     func resetHomeWidgets() {
         state.homeWidgets = HomeWidgetKind.defaultOrder
         state.hiddenHomeWidgets = []
+    }
+
+    /// 将指定首页小组件在可见顺序中上移（delta = -1）或下移（delta = +1）。
+    func moveHomeWidget(_ kind: HomeWidgetKind, by delta: Int) {
+        var current = visibleHomeWidgets
+        guard let idx = current.firstIndex(of: kind) else { return }
+        let target = min(max(0, idx + delta), current.count - 1)
+        guard target != idx else { return }
+        current.remove(at: idx)
+        current.insert(kind, at: target)
+        state.homeWidgets = current + state.hiddenHomeWidgets
+        triggerHaptic(.light)
+    }
+
+    // MARK: - 自定义本地头像持久化（不改变 AppState JSON 结构，100% 兼容历史备份）
+
+    var avatarFileURL: URL {
+        fileURL.deletingLastPathComponent().appendingPathComponent("avatar.jpg")
+    }
+
+    func saveAvatarImage(_ image: UIImage) {
+        if let data = image.jpegData(compressionQuality: 0.82) {
+            try? data.write(to: avatarFileURL, options: .atomic)
+            avatarRevision += 1
+            triggerHaptic(.light)
+        }
+    }
+
+    func loadAvatarImage() -> UIImage? {
+        guard let data = try? Data(contentsOf: avatarFileURL) else { return nil }
+        return UIImage(data: data)
+    }
+
+    func clearAvatarImage() {
+        try? FileManager.default.removeItem(at: avatarFileURL)
+        avatarRevision += 1
+        triggerHaptic(.light)
     }
 
     // MARK: - 本周计划 & 模板管理

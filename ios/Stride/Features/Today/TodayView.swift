@@ -8,6 +8,7 @@ struct TodayView: View {
     @State private var waterStepMl: Int = WaterLog.stepMl
     @State private var quoteIndex: Int = 0
     @State private var healthMetrics: HealthKitManager.DayMetrics?
+    @State private var toast: String?
 
     // 交互弹窗
     @State private var showWorkoutSheet = false
@@ -62,7 +63,7 @@ struct TodayView: View {
 
     var body: some View {
         ZStack {
-            Palette.bg.ignoresSafeArea()
+            ScreenBackground(accent: Palette.green, secondaryAccent: Palette.purple)
 
             ScrollView(showsIndicators: false) {
                 VStack(spacing: Metrics.gap) {
@@ -77,16 +78,19 @@ struct TodayView: View {
                 .padding(.horizontal, Metrics.page)
                 .padding(.top, 66) // 为顶部悬浮 Liquid Glass 分段胶囊栏留出空间
                 .padding(.bottom, Metrics.floatingTabBottomInset + 16)
+                .animation(.spring(response: 0.36, dampingFraction: 0.82), value: store.visibleHomeWidgets)
             }
             .refreshable {
                 store.triggerHaptic(.light)
                 let metrics = await health.todayMetrics()
                 if metrics.steps > 0 || metrics.activeKcal > 0 {
                     healthMetrics = metrics
+                    toast = "已同步今日健康步数与热量"
                 }
             }
         }
         .toolbar(.hidden, for: .navigationBar)
+        .toast($toast)
         .task {
             let metrics = await health.todayMetrics()
             if metrics.steps > 0 || metrics.activeKcal > 0 {
@@ -141,25 +145,26 @@ struct TodayView: View {
         }
     }
 
-    // MARK: - 底部“添加小组件”按钮
+    // MARK: - 底部“自定义小组件”液态玻璃按钮
 
     private var addWidgetButton: some View {
         Button {
             showWidgetManager = true
         } label: {
-            HStack(spacing: 6) {
-                Image(systemName: "plus")
+            HStack(spacing: 7) {
+                Image(systemName: "slider.horizontal.3")
                     .font(.system(size: 13, weight: .bold))
-                Text("添加小组件")
-                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(Palette.green)
+                Text("自定义首页小组件 (\(store.visibleHomeWidgets.count))")
+                    .font(.system(size: 13.5, weight: .semibold))
+                    .foregroundStyle(Palette.text)
+                    .numericRoll(value: store.visibleHomeWidgets.count)
             }
-            .foregroundStyle(Palette.text)
             .padding(.horizontal, 22)
             .padding(.vertical, 12)
-            .background(Capsule().fill(Color.white.opacity(0.11)))
-            .overlay(Capsule().strokeBorder(Color.white.opacity(0.14), lineWidth: 0.8))
+            .liquidGlassCapsule(tint: Palette.cardHigh.opacity(0.65))
         }
-        .buttonStyle(.stridePress)
+        .buttonStyle(.strideSpin)
     }
 
     // MARK: - Bento 行组装逻辑
@@ -204,13 +209,13 @@ struct TodayView: View {
     private func rowView(_ row: BentoRowItem) -> some View {
         switch row {
         case .full(let kind):
-            widgetView(kind)
+            decoratedWidget(kind)
         case .pair(let left, let right):
             HStack(spacing: Metrics.gap) {
-                widgetView(left)
+                decoratedWidget(left)
                     .frame(maxWidth: .infinity)
                 if let right {
-                    widgetView(right)
+                    decoratedWidget(right)
                         .frame(maxWidth: .infinity)
                 } else {
                     Color.clear
@@ -219,6 +224,36 @@ struct TodayView: View {
                 }
             }
         }
+    }
+
+    private func decoratedWidget(_ kind: HomeWidgetKind) -> some View {
+        widgetView(kind)
+            .contextMenu {
+                Button {
+                    withAnimation { store.moveHomeWidget(kind, by: -1) }
+                    toast = "已上移「\(kind.title)」"
+                } label: {
+                    Label("上移此卡片", systemImage: "arrow.up")
+                }
+                Button {
+                    withAnimation { store.moveHomeWidget(kind, by: 1) }
+                    toast = "已下移「\(kind.title)」"
+                } label: {
+                    Label("下移此卡片", systemImage: "arrow.down")
+                }
+                Button(role: .destructive) {
+                    withAnimation { store.setWidgetVisible(kind, visible: false) }
+                    toast = "已隐藏「\(kind.title)」，可在底部恢复"
+                } label: {
+                    Label("隐藏此小组件", systemImage: "eye.slash")
+                }
+                Divider()
+                Button {
+                    showWidgetManager = true
+                } label: {
+                    Label("管理全部小组件", systemImage: "square.grid.2x2")
+                }
+            }
     }
 
     @ViewBuilder
