@@ -100,10 +100,30 @@ extension WatchSession: WCSessionDelegate {
     }
 
     nonisolated func session(_ session: WCSession, didReceiveMessage message: [String: Any]) {
-        let text = message["kind"] as? String ?? "unknown"
+        forwardIncomingPayload(message)
+    }
+
+    nonisolated func session(_ session: WCSession, didReceiveApplicationContext applicationContext: [String: Any]) {
+        forwardIncomingPayload(applicationContext)
+    }
+
+    nonisolated private func forwardIncomingPayload(_ payload: [String: Any]) {
+        let kind = payload["kind"] as? String ?? "unknown"
+        let exerciseId = payload["exerciseId"] as? String
+        let repCount = payload["repCount"] as? Int
+        let confidence = payload["confidence"] as? Double
+        let tempoSec = payload["tempoSec"] as? Double
+
         Task { @MainActor in
-            self.lastEvent = "手表：\(text)"
+            self.lastEvent = "手表：\(kind)"
             self.lastEventAt = Date()
+            WatchMotionSessionController.shared.ingestWatchEvent(
+                kind: kind,
+                exerciseId: exerciseId,
+                repCount: repCount,
+                confidence: confidence,
+                tempoSec: tempoSec
+            )
         }
     }
 

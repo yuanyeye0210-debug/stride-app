@@ -31,6 +31,7 @@ targets:
         INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents: YES
         INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone: UIInterfaceOrientationPortrait
         INFOPLIST_KEY_NSCameraUsageDescription: "用于视觉动作计数：相机画面仅在本机用 Vision 分析关节角度，不上传。"
+        INFOPLIST_KEY_NSMotionUsageDescription: "用于读取耳机空间姿态与手表/手机运动传感器，实现低头护颈提醒、头控手势及动作自动计次（数据仅在本机处理）。"
         INFOPLIST_KEY_NSPhotoLibraryUsageDescription: "选择餐食照片以识别热量与三大营养素。"
         INFOPLIST_KEY_NSMicrophoneUsageDescription: "录制训练动作时同步采集视频（可选）。"
         INFOPLIST_KEY_NSLocationWhenInUseUsageDescription: "记录跑步轨迹并生成足迹画风，只在你点开始时定位。"

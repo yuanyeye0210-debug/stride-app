@@ -43,6 +43,8 @@ struct SessionView: View {
     @EnvironmentObject private var store: AppStore
     @EnvironmentObject private var health: HealthKitManager
     @EnvironmentObject private var watch: WatchSession
+    @EnvironmentObject private var headphone: HeadphoneMotionManager
+    @EnvironmentObject private var watchMotion: WatchMotionSessionController
     @Environment(\.dismiss) private var dismiss
 
     @State private var draft: SessionDraft
@@ -52,6 +54,8 @@ struct SessionView: View {
     @State private var restTotal = 0
     @State private var showLibrary = false
     @State private var showFinishConfirm = false
+    @State private var showHeadphoneSheet = false
+    @State private var showWatchSheet = false
     @State private var setDoneToken = 0
     @State private var toast: String?
 
@@ -68,6 +72,7 @@ struct SessionView: View {
 
                 VStack(spacing: 0) {
                     summaryBar
+                    hardwareSyncBar
                     ScrollView(showsIndicators: false) {
                         VStack(spacing: 12) {
                             if draft.exercises.isEmpty {
@@ -111,6 +116,20 @@ struct SessionView: View {
                 ExerciseLibraryView { exercise in
                     add(exercise)
                 }
+            }
+            .sheet(isPresented: $showHeadphoneSheet) {
+                NavigationStack { HeadphoneCompanionView() }
+                    .strideSheetDetents([.large])
+            }
+            .sheet(isPresented: $showWatchSheet) {
+                NavigationStack { WatchMotionStudioView() }
+                    .strideSheetDetents([.large])
+            }
+            .onReceive(watchMotion.repPublisher) { event in
+                handleWatchRepDetected(event)
+            }
+            .onReceive(headphone.gesturePublisher) { gesture in
+                handleHeadphoneGesture(gesture)
             }
             .alert("结束这次训练？", isPresented: $showFinishConfirm) {
                 Button("取消", role: .cancel) {}
@@ -156,6 +175,56 @@ struct SessionView: View {
 
     private var volume: Double {
         draft.exercises.reduce(0) { $0 + $1.volume }
+    }
+
+    // MARK: - 智能硬件联动条（手表自动计次 + 耳机头控）
+
+    private var hardwareSyncBar: some View {
+        HStack(spacing: 8) {
+            Button {
+                showWatchSheet = true
+            } label: {
+                HStack(spacing: 5) {
+                    Image(systemName: "applewatch")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(watchMotion.isRunning ? Palette.green : Palette.textDim)
+                    Text(watchMotion.isRunning
+                         ? "\(watchMotion.currentExercise.nameZH) · \(watchMotion.repCount)次"
+                         : "手表计次：点此启用")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(Palette.text)
+                        .lineLimit(1)
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(Capsule().fill(watchMotion.isRunning ? Palette.greenDeep : Palette.cardHigh))
+            }
+            .buttonStyle(.stridePress)
+
+            Spacer()
+
+            Button {
+                showHeadphoneSheet = true
+            } label: {
+                HStack(spacing: 5) {
+                    Image(systemName: "airpodspro")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(headphone.nodToCompleteSetEnabled ? Palette.blue : Palette.textDim)
+                    Text(headphone.nodToCompleteSetEnabled ? "点头完成组" : "头控未启用")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(Palette.text)
+                        .lineLimit(1)
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(Capsule().fill(Palette.cardHigh))
+            }
+            .buttonStyle(.stridePress)
+        }
+        .padding(.horizontal, Metrics.page)
+        .padding(.vertical, 8)
+        .background(Palette.cardSoft)
+        .overlay(Rectangle().fill(Palette.stroke).frame(height: 0.5), alignment: .bottom)
     }
 
     // MARK: - 动作卡
@@ -494,5 +563,101 @@ struct SessionView: View {
         // kcal/min = MET × 3.5 × kg / 200
         let perMinute = avgMET * 3.5 * weight / 200.0
         return max(20, Int(perMinute * minutes))
+    }
+
+    // MARK: - 硬件联动：手表自动计次 & 耳机点头/摇头交互
+
+    private func firstPendingSetIndex() -> (exercise: Int, set: Int)? {
+        for i in draft.exercises.indices {
+            if let j = draft.exercises[i].sets.firstIndex(where: { !$0.done }) {
+                return (i, j)
+            }
+        }
+        return nil
+    }
+
+    private func lastCompletedSetIndex() -> (exercise: Int, set: Int)? {
+        for i in draft.exercises.indices.reversed() {
+            if let j = draft.exercises[i].sets.lastIndex(where: { $0.done }) {
+                return (i, j)
+            }
+        }
+        return nil
+    }
+
+    private func handleWatchRepDetected(_ event: WatchRepDetectedEvent) {
+        guard let target = firstPendingSetIndex() else { return }
+        if !draft.exercises[target.exercise].isTimed {
+            withAnimation(.snappy(duration: 0.2)) {
+                draft.exercises[target.exercise].sets[target.set].reps = event.repCount
+            }
+        }
+        toast = "识别「\(event.exercise.nameZH)」第 \(event.repCount) 次"
+    }
+
+    private func handleHeadphoneGesture(_ gesture: HeadphoneGestureEvent) {
+        switch gesture {
+        case .nodCompleteSet:
+            guard let target = firstPendingSetIndex() else {
+                toast = "全部动作组已完成"
+                return
+            }
+            withAnimation(.spring(response: 0.28, dampingFraction: 0.7)) {
+                toggleSet(i: target.exercise, j: target.set)
+            }
+            setDoneToken += 1
+            watchMotion.resetReps()
+            let exName = draft.exercises[target.exercise].name
+            let rest = draft.exercises[target.exercise].restSec
+            toast = "点头打卡：\(exName) 第 \(target.set + 1) 组完成"
+            headphone.speakFormCue("第\(target.set + 1)组完成，开始休息\(rest)秒")
+
+        case .shake(let action):
+            switch action {
+            case .smartDual:
+                if restLeft > 0 {
+                    withAnimation {
+                        restLeft = 0
+                        restTotal = 0
+                    }
+                    watch.push(restSeconds: 0, running: false)
+                    toast = "摇头：已跳过组间休息"
+                } else if let prev = lastCompletedSetIndex() {
+                    withAnimation {
+                        toggleSet(i: prev.exercise, j: prev.set)
+                    }
+                    toast = "摇头：已撤销第 \(prev.set + 1) 组完成状态"
+                } else {
+                    toast = "摇头：智能双场景待命中"
+                }
+
+            case .nextTrack:
+                toast = "摇头：已切换下一首节奏音乐"
+
+            case .voiceFormCue:
+                let activeIdx = firstPendingSetIndex()?.exercise ?? 0
+                if activeIdx < draft.exercises.count {
+                    let exName = draft.exercises[activeIdx].name
+                    let stepHint = ExerciseCatalogStore.shared
+                        .filter(query: exName, bodyPart: nil, equipment: nil)
+                        .first?.steps.first ?? "保持核心收紧，控制离心下放节奏"
+                    let cue = "\(exName)：\(stepHint)"
+                    headphone.speakFormCue(cue)
+                    toast = "语音播报：\(exName)"
+                }
+
+            case .deloadNextSet:
+                if let target = firstPendingSetIndex() {
+                    for j in target.set..<draft.exercises[target.exercise].sets.count {
+                        let oldWeight = draft.exercises[target.exercise].sets[j].weight
+                        if oldWeight > 0 {
+                            let reduced = (oldWeight * 0.9 * 2).rounded() / 2.0
+                            draft.exercises[target.exercise].sets[j].weight = max(0, reduced)
+                        }
+                    }
+                    toast = "摇头：后续未完成组重量已下调 10%"
+                }
+            }
+        }
     }
 }

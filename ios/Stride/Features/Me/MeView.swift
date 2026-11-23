@@ -22,6 +22,8 @@ struct MeView: View {
     @EnvironmentObject private var ai: AISettings
     @EnvironmentObject private var health: HealthKitManager
     @EnvironmentObject private var watch: WatchSession
+    @EnvironmentObject private var headphone: HeadphoneMotionManager
+    @EnvironmentObject private var watchMotion: WatchMotionSessionController
 
     @State private var toast: String?
     @State private var syncing = false
@@ -323,14 +325,31 @@ struct MeView: View {
 
     private var deviceAndReminderSection: some View {
         VStack(spacing: 0) {
-            Button {
-                watch.activate()
-                toast = watch.supported ? "手表桥接已启动" : "这台设备不支持 Watch 连接"
+            NavigationLink {
+                HeadphoneCompanionView()
+            } label: {
+                SettingRow(
+                    icon: "airpodspro",
+                    title: "智能耳机 · 护颈与 3D",
+                    value: headphone.isHeadphoneConnected
+                        ? "\(headphone.activeModel.shortTag) · \(HeadphoneCompanionStore.formatDuration(headphone.todayCompanionSec))"
+                        : "今日 \(HeadphoneCompanionStore.formatDuration(headphone.todayCompanionSec))",
+                    tint: Palette.blue
+                )
+            }
+            .buttonStyle(.strideRow(radius: 14))
+
+            divider
+
+            NavigationLink {
+                WatchMotionStudioView()
             } label: {
                 SettingRow(
                     icon: "applewatch",
-                    title: "Apple Watch",
-                    value: watch.reachable ? "● 已连接" : (watch.supported ? "已配对未连接" : "不可用"),
+                    title: "手表动作识别与计次",
+                    value: watch.reachable
+                        ? "已连接 · \(watchMotion.repCount) 次"
+                        : (watchMotion.isRunning ? "识别中 · \(watchMotion.repCount) 次" : "10 动作模型"),
                     tint: Palette.green
                 )
             }

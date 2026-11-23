@@ -256,6 +256,16 @@ struct MusicDiscoverView: View {
             isPlaying = false
             MetronomeAudioEngine.shared.stop()
         }
+        .onReceive(NotificationCenter.default.publisher(for: .strideMusicNextTrack)) { _ in
+            guard !topTracks.isEmpty else { return }
+            if let current = activeTrack,
+               let idx = topTracks.firstIndex(where: { $0.id == current.id }) {
+                activeTrack = topTracks[(idx + 1) % topTracks.count]
+            } else {
+                activeTrack = topTracks.first
+            }
+            isPlaying = true
+        }
     }
 
     private func sectionHeader(_ title: String) -> some View {

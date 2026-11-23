@@ -323,6 +323,7 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_NSCameraUsageDescription = "用于视觉动作计数：相机画面仅在本机用 Vision 分析关节角度，不上传。";
+				INFOPLIST_KEY_NSMotionUsageDescription = "用于读取耳机空间姿态与手表/手机运动传感器，实现低头护颈提醒、头控手势及动作自动计次（数据仅在本机处理）。";
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "读取步数、活动能量、心率与体重，用于今日概览和训练负荷判断。";
 				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "把完成的训练写入 Apple 健康，保持你的运动记录完整。";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "选择餐食照片以识别热量与三大营养素。";
@@ -359,6 +360,7 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_NSCameraUsageDescription = "用于视觉动作计数：相机画面仅在本机用 Vision 分析关节角度，不上传。";
+				INFOPLIST_KEY_NSMotionUsageDescription = "用于读取耳机空间姿态与手表/手机运动传感器，实现低头护颈提醒、头控手势及动作自动计次（数据仅在本机处理）。";
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "读取步数、活动能量、心率与体重，用于今日概览和训练负荷判断。";
 				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "把完成的训练写入 Apple 健康，保持你的运动记录完整。";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "选择餐食照片以识别热量与三大营养素。";
