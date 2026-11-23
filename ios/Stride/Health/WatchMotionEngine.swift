@@ -905,7 +905,7 @@ public final class WatchMotionSessionController: ObservableObject {
                 let win1 = Array(calibrationBuffers.prefix(100))
                 let win2 = Array(calibrationBuffers.suffix(100))
                 classifier?.saveCalibration(for: calibrationTarget, windows: [win1, win2])
-                calibratedClasses = Set(classifier?.prototypes.keys ?? [].map { $0 })
+                calibratedClasses = Set(classifier?.prototypes.keys.map { $0 } ?? [])
                 isCalibrating = false
                 calibrationProgress = 1.0
             }
