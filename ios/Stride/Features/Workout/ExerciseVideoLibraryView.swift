@@ -178,8 +178,9 @@ struct ExerciseVideoLibraryView: View {
     private func partChip(title: String, value: String?) -> some View {
         let active = selectedBodyPart == value
         return Button {
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.78)) {
+            if selectedBodyPart != value {
                 selectedBodyPart = value
+                StrideHaptics.shared.selection()
             }
         } label: {
             Text(title)
@@ -187,16 +188,9 @@ struct ExerciseVideoLibraryView: View {
                 .foregroundStyle(active ? Color.black : Palette.textDim)
                 .padding(.horizontal, 13)
                 .padding(.vertical, 7)
-                .background {
-                    if active {
-                        Capsule()
-                            .fill(Color.white)
-                            .matchedGeometryEffect(id: "exercisePartChip", in: partNS)
-                    } else {
-                        Capsule()
-                            .fill(Palette.card)
-                    }
-                }
+                .background(
+                    Capsule().fill(active ? Color.white : Palette.card)
+                )
         }
         .buttonStyle(.stridePress)
     }
@@ -210,14 +204,14 @@ struct ExerciseVideoLibraryView: View {
                 }
             }
         }
-        .sensoryFeedback(.selection, trigger: selectedEquipment)
     }
 
     private func equipChip(title: String, value: String?) -> some View {
         let active = selectedEquipment == value
         return Button {
-            withAnimation(.snappy(duration: 0.22)) {
+            if selectedEquipment != value {
                 selectedEquipment = value
+                StrideHaptics.shared.selection()
             }
         } label: {
             Text(title)

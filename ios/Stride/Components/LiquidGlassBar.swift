@@ -33,8 +33,7 @@ struct HomePulseIcon: View {
                 .padding(.bottom, 3)
         }
         .frame(width: 22, height: 20)
-        .scaleEffect(active ? 1.06 : 0.96)
-        .animation(.spring(response: 0.32, dampingFraction: 0.65), value: active)
+        .scaleEffect(active ? 1.05 : 0.96)
     }
 }
 
@@ -72,7 +71,7 @@ private struct PulseWaveShape: Shape {
     }
 }
 
-// MARK: - 底部悬浮液态玻璃 4 Tab 胶囊栏
+// MARK: - 底部悬浮液态玻璃 4 Tab 胶囊栏（页面零延迟瞬切 + 胶囊独立丝滑动画）
 
 struct FloatingTabBar: View {
     @Binding var selection: Int
@@ -99,12 +98,13 @@ struct FloatingTabBar: View {
                     .symbolEffect(.bounce.down, value: active)
             }
         }
+        // 仅在导航栏自身对 selection 变化执行胶囊滑动动画，绝不将整个大页面卷入动画事务
+        .animation(.snappy(duration: 0.20), value: selection)
         .padding(.horizontal, 6)
         .padding(.vertical, 5)
         .liquidGlassCapsule(tint: Color.black.opacity(0.48))
         .padding(.horizontal, 22)
         .padding(.bottom, 6)
-        .sensoryFeedback(.selection, trigger: selection)
     }
 
     private func tabButton<Icon: View>(
@@ -114,8 +114,9 @@ struct FloatingTabBar: View {
     ) -> some View {
         let on = selection == tag
         return Button {
-            withAnimation(.spring(response: 0.34, dampingFraction: 0.76)) {
+            if selection != tag {
                 selection = tag
+                StrideHaptics.shared.selection()
             }
         } label: {
             VStack(spacing: 3) {
@@ -151,7 +152,7 @@ struct FloatingTabBar: View {
     }
 }
 
-// MARK: - 主页顶部悬浮分段胶囊栏 + 动态上下文圆按钮
+// MARK: - 主页顶部悬浮分段胶囊栏 + 动态上下文圆按钮（页面瞬切 + 胶囊独立动画）
 
 struct HomeTopSegmentBar: View {
     @Binding var channel: HomeChannel
@@ -167,8 +168,9 @@ struct HomeTopSegmentBar: View {
                 ForEach(HomeChannel.allCases) { item in
                     let active = channel == item
                     Button {
-                        withAnimation(.spring(response: 0.34, dampingFraction: 0.76)) {
+                        if channel != item {
                             channel = item
+                            StrideHaptics.shared.selection()
                         }
                     } label: {
                         Text(item.rawValue)
@@ -198,13 +200,11 @@ struct HomeTopSegmentBar: View {
                     .buttonStyle(StridePressButtonStyle(scale: 0.95, pressedOpacity: 0.9, haptic: nil))
                 }
             }
+            .animation(.snappy(duration: 0.20), value: channel)
             .padding(4)
             .liquidGlassCapsule(tint: Color.black.opacity(0.45))
-            .sensoryFeedback(.selection, trigger: channel)
 
             contextTrailingButton
-                .transition(.scale(scale: 0.72).combined(with: .opacity))
-                .animation(.spring(response: 0.3, dampingFraction: 0.78), value: channel)
         }
         .padding(.horizontal, Metrics.page)
         .padding(.top, 6)
@@ -243,62 +243,41 @@ struct HomeTopSegmentBar: View {
     }
 }
 
+/// 零后台开销的高奢极光 AI 按钮（移除常驻 TimelineView 与动态高斯模糊离屏渲染）。
 struct AIGlowCircleButton: View {
     var action: () -> Void
-    @State private var glowPulse = false
 
     var body: some View {
         Button(action: action) {
             ZStack {
                 Circle()
                     .fill(
-                        AngularGradient(
-                            colors: [
-                                Color(hex: 0x6280FF),
-                                Color(hex: 0xFF83C6),
-                                Color(hex: 0xFFBA6A),
-                                Color(hex: 0x2DD4BF),
-                                Color(hex: 0x6280FF)
-                            ],
-                            center: .center
+                        LinearGradient(
+                            colors: [Palette.indigo, Palette.purple, Palette.cyan],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
                         )
                     )
-                    .frame(width: 48, height: 48)
-                    .blur(radius: 5.5)
-                    .opacity(glowPulse ? 0.88 : 0.56)
-                    .scaleEffect(glowPulse ? 1.07 : 0.94)
-
-                AuroraBannerBackground(
-                    colorA: Palette.indigo,
-                    colorB: Palette.purple,
-                    colorC: Palette.cyan
-                )
-                .clipShape(Circle())
-                .frame(width: 43, height: 43)
-                .overlay(
-                    Circle()
-                        .strokeBorder(
-                            LinearGradient(
-                                colors: [Color.white.opacity(0.8), Color(hex: 0xFFB86B).opacity(0.75)],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            ),
-                            lineWidth: 1.3
-                        )
-                )
+                    .frame(width: 44, height: 44)
+                    .overlay(
+                        Circle()
+                            .strokeBorder(
+                                LinearGradient(
+                                    colors: [Color.white.opacity(0.85), Palette.amber.opacity(0.75)],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                ),
+                                lineWidth: 1.3
+                            )
+                    )
 
                 Text("AI")
                     .font(.system(size: 15, weight: .bold, design: .rounded))
                     .foregroundStyle(Color.white)
             }
-            .frame(width: 46, height: 46)
+            .frame(width: 44, height: 44)
         }
         .buttonStyle(.strideAurora)
-        .onAppear {
-            withAnimation(.easeInOut(duration: 2.6).repeatForever(autoreverses: true)) {
-                glowPulse = true
-            }
-        }
         .accessibilityLabel("打开 AI 教练")
     }
 }

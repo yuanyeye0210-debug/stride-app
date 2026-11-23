@@ -6,37 +6,31 @@ struct RootTabView: View {
 
     var body: some View {
         ZStack(alignment: .bottom) {
-            ZStack {
-                tab(0) {
+            // 按需只挂载当前激活的 Tab，彻底杜绝 4 个重型页面同时常驻 ZStack 抢占 CPU/GPU
+            Group {
+                switch selection {
+                case 0:
                     NavigationStack {
                         HomeChannelHostView(
                             channel: $homeChannel,
                             onJumpToPlan: {
-                                withAnimation(.spring(response: 0.28, dampingFraction: 0.82)) {
-                                    selection = 1
-                                }
+                                selection = 1
                             }
                         )
                     }
+                case 1:
+                    NavigationStack { PlanHubView() }
+                case 2:
+                    NavigationStack { ProgressViewScreen() }
+                default:
+                    NavigationStack { MeView() }
                 }
-                tab(1) { NavigationStack { PlanHubView() } }
-                tab(2) { NavigationStack { ProgressViewScreen() } }
-                tab(3) { NavigationStack { MeView() } }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
 
             FloatingTabBar(selection: $selection)
         }
         .background(Palette.bg.ignoresSafeArea())
-    }
-
-    private func tab<Content: View>(_ tag: Int, @ViewBuilder content: () -> Content) -> some View {
-        content()
-            .opacity(selection == tag ? 1 : 0)
-            .scaleEffect(selection == tag ? 1.0 : 0.985)
-            .animation(.snappy(duration: 0.24), value: selection)
-            .allowsHitTesting(selection == tag)
-            .accessibilityHidden(selection != tag)
     }
 }
 
@@ -54,6 +48,7 @@ private struct HomeChannelHostView: View {
 
     var body: some View {
         ZStack(alignment: .top) {
+            // 频道视图直接瞬切，不把整屏数百个子视图卷入 Spring 布局插值动画
             Group {
                 switch channel {
                 case .home:
@@ -67,7 +62,6 @@ private struct HomeChannelHostView: View {
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .animation(.snappy(duration: 0.24), value: channel)
 
             HomeTopSegmentBar(
                 channel: $channel,

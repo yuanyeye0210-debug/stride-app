@@ -798,9 +798,9 @@ final class AppStore: ObservableObject {
         if state.hapticModeRaw == "necessary" && kind == .light { return }
         switch kind {
         case .light:
-            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            StrideHaptics.shared.impact(.light, intensity: 0.55)
         case .success:
-            UINotificationFeedbackGenerator().notificationOccurred(.success)
+            StrideHaptics.shared.notification(.success)
         }
     }
 

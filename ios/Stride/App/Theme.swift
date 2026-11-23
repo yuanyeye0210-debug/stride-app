@@ -1,9 +1,9 @@
 import SwiftUI
 
-// MARK: - Obsidian Carbon 高奢暗黑美学配色系统
+// MARK: - Obsidian Carbon 高奢暗黑美学配色系统（120Hz 零离屏渲染优化版）
 
 enum Palette {
-    // 曜石炭黑层级底色（告别死板纯黑，构建深邃空间层次）
+    // 曜石炭黑层级底色
     static let bg        = Color(hex: 0x07080C)
     static let surface   = Color(hex: 0x0F1118)
     static let card      = Color(hex: 0x151822)
@@ -15,7 +15,7 @@ enum Palette {
     static let textDim   = Color(hex: 0x99A0B3)
     static let textFaint = Color(hex: 0x62687A)
 
-    // 高级纯正语义色（翡翠绿 / 香槟金 / 冰河蓝 / 极光紫 / 绯红珊瑚）
+    // 高级纯正语义色
     static let green     = Color(hex: 0x34D88B)
     static let greenText = Color(hex: 0x7CF2B8)
     static let greenDeep = Color(hex: 0x123325)
@@ -36,11 +36,11 @@ enum Palette {
     static let ringEx    = Color(hex: 0xA4FF00)
     static let ringStand = Color(hex: 0x00E5FF)
 
-    // 实体拟物材质色（保留兼容引用）
+    // 实体拟物材质色
     static let noteYellow   = Color(hex: 0xFCEB7A)
     static let paperWhite   = Color(hex: 0xF5F5F7)
 
-    // 新增 Obsidian 高奢深邃材质色
+    // Obsidian 高奢深邃材质色
     static let obsidianGold  = Color(hex: 0x241F14)
     static let obsidianGlass = Color(hex: 0x181C28)
     static let receiptDark   = Color(hex: 0x161923)
@@ -71,76 +71,35 @@ enum Metrics {
     static let floatingTabBottomInset: CGFloat = 92
 }
 
-// MARK: - Card & Liquid Glass
+// MARK: - Card & Liquid Glass（单层 Shape 硬件直接合成，0 离屏高斯阴影开销）
 
-/// 升级后的深炭微渐层玻璃卡片背景 + 方向性镜面折射边框。
 struct CardBackground: ViewModifier {
     var radius: CGFloat = Metrics.radius
     var fill: Color = Palette.card
     var stroke: Color? = Palette.stroke
     var lineWidth: CGFloat = 1
 
-    private var isDefaultStroke: Bool {
-        stroke == Palette.stroke
-    }
-
     func body(content: Content) -> some View {
         let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
         content
-            .background(
-                ZStack {
-                    shape.fill(fill)
-                    shape.fill(
-                        LinearGradient(
-                            colors: [
-                                Color.white.opacity(0.038),
-                                Color.white.opacity(0.006),
-                                Color.black.opacity(0.14)
-                            ],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                }
-            )
+            .background(shape.fill(fill))
             .overlay(
-                Group {
-                    if let stroke {
-                        if isDefaultStroke {
-                            shape.strokeBorder(
-                                LinearGradient(
-                                    colors: [
-                                        Color.white.opacity(0.17),
-                                        Color.white.opacity(0.065),
-                                        Color.white.opacity(0.025)
-                                    ],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                ),
-                                lineWidth: lineWidth
-                            )
-                        } else {
-                            shape.strokeBorder(
-                                LinearGradient(
-                                    colors: [
-                                        stroke,
-                                        stroke.opacity(0.45),
-                                        stroke.opacity(0.22)
-                                    ],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                ),
-                                lineWidth: lineWidth
-                            )
-                        }
-                    }
-                }
+                shape.strokeBorder(
+                    LinearGradient(
+                        colors: [
+                            (stroke ?? .clear).opacity(stroke == Palette.stroke ? 1.5 : 1.0),
+                            (stroke ?? .clear).opacity(0.45)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    lineWidth: lineWidth
+                )
             )
-            .shadow(color: .black.opacity(0.28), radius: 14, y: 6)
     }
 }
 
-/// 借鉴 Ultrahuman / WHOOP 的高奢暗夜玻璃卡片：一角克制氛围光晕 + 顶边 0.6pt 镜面高光。
+/// 借鉴 Ultrahuman / WHOOP 的高奢暗夜玻璃卡片：单层斜向微光渐变 + 顶边镜面渐变描边（零离屏阴影）。
 struct LuxuryCardModifier: ViewModifier {
     var radius: CGFloat = Metrics.radius
     var accent: Color = Palette.green
@@ -151,39 +110,24 @@ struct LuxuryCardModifier: ViewModifier {
         let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
         content
             .background(
-                ZStack {
-                    shape.fill(fill)
-                    shape.fill(
-                        LinearGradient(
-                            colors: [
-                                Color.white.opacity(0.045),
-                                Color.clear,
-                                Color.black.opacity(0.18)
-                            ],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
+                shape.fill(
+                    LinearGradient(
+                        colors: [
+                            accent.opacity(0.11),
+                            fill,
+                            fill
+                        ],
+                        startPoint: glowCorner,
+                        endPoint: glowCorner == .topTrailing ? .bottomLeading : .topTrailing
                     )
-                    shape.fill(
-                        RadialGradient(
-                            colors: [
-                                accent.opacity(0.16),
-                                accent.opacity(0.04),
-                                .clear
-                            ],
-                            center: glowCorner,
-                            startRadius: 4,
-                            endRadius: 210
-                        )
-                    )
-                }
+                )
             )
             .overlay(
                 shape.strokeBorder(
                     LinearGradient(
                         colors: [
-                            Color.white.opacity(0.22),
-                            accent.opacity(0.22),
+                            Color.white.opacity(0.19),
+                            accent.opacity(0.20),
                             Color.white.opacity(0.04)
                         ],
                         startPoint: .topLeading,
@@ -192,7 +136,6 @@ struct LuxuryCardModifier: ViewModifier {
                     lineWidth: 0.9
                 )
             )
-            .shadow(color: .black.opacity(0.32), radius: 16, y: 8)
     }
 }
 
@@ -211,9 +154,9 @@ struct LiquidGlassCapsuleModifier: ViewModifier {
                     .strokeBorder(
                         LinearGradient(
                             colors: [
-                                Color.white.opacity(0.34),
+                                Color.white.opacity(0.32),
                                 Color.white.opacity(0.08),
-                                Color.white.opacity(0.20)
+                                Color.white.opacity(0.18)
                             ],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
@@ -221,7 +164,7 @@ struct LiquidGlassCapsuleModifier: ViewModifier {
                         lineWidth: 0.9
                     )
             }
-            .shadow(color: .black.opacity(0.45), radius: 20, y: 10)
+            .shadow(color: .black.opacity(0.35), radius: 8, y: 4)
     }
 }
 
@@ -235,7 +178,7 @@ extension View {
         modifier(CardBackground(radius: radius, fill: fill, stroke: stroke, lineWidth: lineWidth))
     }
 
-    /// 曜石深邃氛围玻璃卡片（含单角极光光晕与镜面渐变边）
+    /// 曜石深邃氛围玻璃卡片（单层硬件渐变，120Hz 满帧滚动）
     func luxuryCard(
         radius: CGFloat = Metrics.radius,
         accent: Color = Palette.green,
@@ -272,17 +215,10 @@ struct ScreenBackground: View {
         ZStack {
             Palette.bg.ignoresSafeArea()
             RadialGradient(
-                colors: [accent.opacity(0.085), accent.opacity(0.02), .clear],
+                colors: [accent.opacity(0.075), .clear],
                 center: .init(x: 0.5, y: -0.16),
                 startRadius: 10,
-                endRadius: 400
-            )
-            .ignoresSafeArea()
-            RadialGradient(
-                colors: [secondaryAccent.opacity(0.045), .clear],
-                center: .init(x: 0.88, y: 0.95),
-                startRadius: 10,
-                endRadius: 340
+                endRadius: 380
             )
             .ignoresSafeArea()
         }

@@ -38,10 +38,8 @@ struct RunCenterView: View {
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .animation(.snappy(duration: 0.24), value: subTab)
             }
         }
-        .sensoryFeedback(.selection, trigger: subTab)
         .sheet(isPresented: $showGPSRun) {
             RunCaptureView()
         }
@@ -61,8 +59,9 @@ struct RunCenterView: View {
             ForEach(RunCenterSubTab.allCases) { item in
                 let active = subTab == item
                 Button {
-                    withAnimation(.snappy(duration: 0.22)) {
+                    if subTab != item {
                         subTab = item
+                        StrideHaptics.shared.selection()
                     }
                 } label: {
                     VStack(spacing: 6) {
@@ -179,8 +178,9 @@ struct RunCenterView: View {
     private func categoryFilterChip(title: String, category: SportCategory?) -> some View {
         let active = selectedCategory == category
         return Button {
-            withAnimation(.spring(response: 0.28, dampingFraction: 0.78)) {
+            if selectedCategory != category {
                 selectedCategory = category
+                StrideHaptics.shared.selection()
             }
         } label: {
             Text(title)
@@ -188,15 +188,9 @@ struct RunCenterView: View {
                 .foregroundStyle(active ? Color.black : Palette.textDim)
                 .padding(.horizontal, 13)
                 .padding(.vertical, 7)
-                .background {
-                    if active {
-                        Capsule()
-                            .fill(Palette.lime)
-                            .matchedGeometryEffect(id: "runSportCategoryChip", in: catFilterNS)
-                    } else {
-                        Capsule().fill(Palette.card)
-                    }
-                }
+                .background(
+                    Capsule().fill(active ? Palette.lime : Palette.card)
+                )
         }
         .buttonStyle(.stridePress)
     }

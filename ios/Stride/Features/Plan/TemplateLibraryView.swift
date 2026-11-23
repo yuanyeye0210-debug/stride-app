@@ -76,8 +76,9 @@ struct TemplateLibraryView: View {
                 ForEach(TemplateCatalog.categories, id: \.self) { category in
                     let active = selectedCategory == category
                     Button {
-                        withAnimation(.snappy(duration: 0.22)) {
+                        if selectedCategory != category {
                             selectedCategory = category
+                            StrideHaptics.shared.selection()
                         }
                     } label: {
                         Text(category)

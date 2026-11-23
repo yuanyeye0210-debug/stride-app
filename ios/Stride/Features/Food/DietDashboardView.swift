@@ -254,8 +254,9 @@ struct DietDashboardView: View {
                 let ratio = min(1.0, max(0.0, eaten / Double(max(1, kcalTarget))))
 
                 Button {
-                    withAnimation(.spring(response: 0.28, dampingFraction: 0.78)) {
+                    if !cal.isDate(day, inSameDayAs: selectedDate) {
                         selectedDate = day
+                        StrideHaptics.shared.selection()
                     }
                 } label: {
                     VStack(spacing: 5) {

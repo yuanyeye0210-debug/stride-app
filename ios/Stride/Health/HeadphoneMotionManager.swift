@@ -572,6 +572,7 @@ public final class HeadphoneMotionManager: NSObject, ObservableObject {
     private var companionTimer: Timer?
     private var simPostureTimer: Timer?
     private var ticksSinceLastSave = 0
+    private var lastMotionUIPublishTime: TimeInterval = 0
     private var routeObserver: NSObjectProtocol?
 
     public init(store: HeadphoneCompanionStore = HeadphoneCompanionStore()) {
@@ -745,13 +746,14 @@ public final class HeadphoneMotionManager: NSObject, ObservableObject {
     private func tickCompanionSecond() {
         if isHeadphoneConnected {
             store.addCompanionTime(1.0, model: activeModel, at: Date())
-            todayCompanionSec = store.todaySeconds()
-            totalCompanionSec = store.state.totalSeconds
-            streakDays = store.streakDays()
-            recent7Days = store.recent7Days()
             ticksSinceLastSave += 1
+            // 每 10 秒批量同步一次 UI 统计属性与磁盘，避免每秒广播 objectWillChange 导致全局视图重排
             if ticksSinceLastSave >= 10 {
                 ticksSinceLastSave = 0
+                todayCompanionSec = store.todaySeconds()
+                totalCompanionSec = store.state.totalSeconds
+                streakDays = store.streakDays()
+                recent7Days = store.recent7Days()
                 store.save()
             }
         }
@@ -767,13 +769,25 @@ public final class HeadphoneMotionManager: NSObject, ObservableObject {
             let yawDeg = motion.attitude.yaw * 180.0 / .pi
             let rollDeg = motion.attitude.roll * 180.0 / .pi
 
-            self.liveYawDeg = yawDeg
-            self.liveRollDeg = rollDeg
-
             let postureOut = self.postureEngine.step(downwardPitchDeg: pitchDeg, timestamp: motion.timestamp)
-            self.livePitchDeg = postureOut.relativeDownwardDeg
-            self.continuousHeadDownSec = postureOut.continuousHeadDownSec
-            self.alertLevel = postureOut.alertLevel
+
+            // 节流 UI 广播至最多 10Hz 且变化显著时才触发 @Published，杜绝 100Hz 传感器回调阻塞主线程
+            let shouldPublishUI = (motion.timestamp - self.lastMotionUIPublishTime >= 0.10)
+                && (abs(postureOut.relativeDownwardDeg - self.livePitchDeg) >= 0.6
+                    || abs(yawDeg - self.liveYawDeg) >= 0.8
+                    || postureOut.alertLevel != self.alertLevel
+                    || Int(postureOut.continuousHeadDownSec) != Int(self.continuousHeadDownSec))
+
+            if shouldPublishUI {
+                self.lastMotionUIPublishTime = motion.timestamp
+                self.liveYawDeg = yawDeg
+                self.liveRollDeg = rollDeg
+                self.livePitchDeg = postureOut.relativeDownwardDeg
+                self.continuousHeadDownSec = postureOut.continuousHeadDownSec
+                if self.alertLevel != postureOut.alertLevel {
+                    self.alertLevel = postureOut.alertLevel
+                }
+            }
 
             if postureOut.shouldTriggerAlert && self.isPostureMonitorEnabled {
                 self.fireHeadDownAlert(angleDeg: postureOut.relativeDownwardDeg, heldSeconds: postureOut.continuousHeadDownSec)

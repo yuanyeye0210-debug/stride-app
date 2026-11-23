@@ -40,7 +40,6 @@ struct PlanHubView: View {
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .animation(.snappy(duration: 0.24), value: subTab)
 
             topBar
         }
@@ -74,8 +73,9 @@ struct PlanHubView: View {
                 ForEach(PlanSubTab.allCases) { item in
                     let active = subTab == item
                     Button {
-                        withAnimation(.spring(response: 0.28, dampingFraction: 0.82)) {
+                        if subTab != item {
                             subTab = item
+                            StrideHaptics.shared.selection()
                         }
                     } label: {
                         Text(item.rawValue)
@@ -99,9 +99,9 @@ struct PlanHubView: View {
                     .buttonStyle(StridePressButtonStyle(scale: 0.95, pressedOpacity: 0.9, haptic: nil))
                 }
             }
+            .animation(.snappy(duration: 0.20), value: subTab)
             .padding(4)
             .liquidGlassCapsule(tint: Color.black.opacity(0.45))
-            .sensoryFeedback(.selection, trigger: subTab)
 
             Spacer()
 

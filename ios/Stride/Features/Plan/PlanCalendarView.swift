@@ -129,8 +129,9 @@ struct PlanCalendarView: View {
         }()
 
         return Button {
-            withAnimation(.spring(response: 0.28, dampingFraction: 0.78)) {
+            if !cal.isDate(date, inSameDayAs: selectedDate) {
                 selectedDate = date
+                StrideHaptics.shared.selection()
             }
         } label: {
             VStack(spacing: 4) {

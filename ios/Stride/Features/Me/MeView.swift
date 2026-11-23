@@ -366,7 +366,7 @@ struct MeView: View {
                 showCoachSheet = true
             } label: {
                 HStack(spacing: 12) {
-                    AudioSpectrumBars(isPlaying: true, bpm: 116, color: Palette.purple, barCount: 4, maxHeight: 16)
+                    AudioSpectrumBars(isPlaying: false, bpm: 116, color: Palette.purple, barCount: 4, maxHeight: 16)
                         .frame(width: 30)
 
                     Text(Brand.intelligenceName)

@@ -136,8 +136,9 @@ struct HeadphoneCompanionView: View {
                     ForEach(HeadphoneModelKind.allCases) { kind in
                         let selected = headphone.activeModel == kind
                         Button {
-                            withAnimation(.spring(response: 0.3, dampingFraction: 0.78)) {
+                            if headphone.activeModel != kind {
                                 headphone.selectDisplayModel(kind)
+                                StrideHaptics.shared.selection()
                             }
                         } label: {
                             Text(kind.displayName)
@@ -145,15 +146,9 @@ struct HeadphoneCompanionView: View {
                                 .foregroundStyle(selected ? Color.black : Palette.textDim)
                                 .padding(.horizontal, 12)
                                 .padding(.vertical, 7)
-                                .background {
-                                    if selected {
-                                        Capsule()
-                                            .fill(Color.white)
-                                            .matchedGeometryEffect(id: "headphoneModelPill", in: headphoneModelNS)
-                                    } else {
-                                        Capsule().fill(Palette.cardHigh)
-                                    }
-                                }
+                                .background(
+                                    Capsule().fill(selected ? Color.white : Palette.cardHigh)
+                                )
                         }
                         .buttonStyle(.stridePress)
                     }
